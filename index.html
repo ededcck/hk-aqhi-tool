@@ -21,7 +21,8 @@
         th { background: var(--p); color: white; }
         .mobile-view { display: none; margin-top: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 5px solid #ccc; }
-        .card-header { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; }
+        .card-header { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .time-label { font-size: 0.8rem; color: #666; font-weight: normal; margin-left: 5px; }
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
         .item { text-align: center; padding: 6px 0; background: #fafafa; border-radius: 8px; }
         .label { font-size: 0.65rem; color: #888; display: block; }
@@ -31,45 +32,54 @@
     </style>
 
     <script>
-        // 將 JavaScript 擺喺 Head，確保 loadData 一早被定義
-        let fullData = []; 
+        let latestData = {}; 
         const TH = { no2: 200, o3: 160, so2: 50, pm10: 100, pm25: 50 };
 
         async function loadData() {
             const debug = document.getElementById('debug-info');
             const updateTime = document.getElementById('update-time');
-            debug.innerText = "正在連線數據庫...";
+            debug.innerText = "讀取最新空氣質素...";
             debug.style.display = "block";
 
             try {
                 const res = await fetch('data.xml?v=' + Date.now());
-                if (!res.ok) throw new Error("404: 搵唔到 data.xml，請檢查 GitHub Actions 係咪成功行完。");
+                if (!res.ok) throw new Error("搵唔到數據檔案");
                 
                 const txt = await res.text();
                 const xml = new DOMParser().parseFromString(txt, "text/xml");
                 const items = xml.getElementsByTagName("PollutantConcentration");
                 
-                if (items.length === 0) throw new Error("XML 內容空白，環保署可能維護緊。");
+                // 用嚟暫存每一區最新嘅時間同數據
+                const tempMap = {}; 
 
-                fullData = [];
-                const stationNames = new Set();
                 for (let i = 0; i < items.length; i++) {
                     const name = items[i].getElementsByTagName("StationName")[0].textContent;
-                    const type = ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般";
-                    fullData.push({
-                        name: name, type: type,
-                        no2: items[i].getElementsByTagName("二氧化氮")[0].textContent,
-                        o3:  items[i].getElementsByTagName("臭氧")[0].textContent,
-                        so2: items[i].getElementsByTagName("二氧化硫")[0].textContent,
-                        pm10: items[i].getElementsByTagName("可吸入懸浮粒子")[0].textContent,
-                        pm25: items[i].getElementsByTagName("細顆粒物")[0].textContent
-                    });
-                    stationNames.add(name);
+                    const dateTimeStr = items[i].getElementsByTagName("DateTime")[0].textContent;
+                    // 將時間字串轉做 Date 物件嚟比較
+                    const currentTime = new Date(dateTimeStr.replace(' +0800', ''));
+
+                    // 如果呢個地區仲未有紀錄，或者呢條紀錄比之前存低嘅更「新」
+                    if (!tempMap[name] || currentTime > tempMap[name].rawTime) {
+                        tempMap[name] = {
+                            name: name,
+                            rawTime: currentTime,
+                            displayTime: dateTimeStr.split(' ')[4].substring(0, 5), // 攞出 "14:00" 格式
+                            type: ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般",
+                            no2: items[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
+                            o3:  items[i].getElementsByTagName("臭氧")[0]?.textContent || "-",
+                            so2: items[i].getElementsByTagName("二氧化硫")[0]?.textContent || "-",
+                            pm10: items[i].getElementsByTagName("可吸入懸浮粒子")[0]?.textContent || "-",
+                            pm25: items[i].getElementsByTagName("細顆粒物")[0]?.textContent || "-"
+                        };
+                    }
                 }
 
+                latestData = tempMap;
+
+                // 更新下拉選單
                 const selector = document.getElementById('station-selector');
                 while (selector.options.length > 3) selector.remove(3);
-                Array.from(stationNames).sort().forEach(name => {
+                Object.keys(latestData).sort().forEach(name => {
                     selector.add(new Option(name, name));
                 });
 
@@ -85,45 +95,4 @@
             const tBody = document.getElementById('table-body');
             const mList = document.getElementById('mobile-list');
             let tHTML = '', mHTML = '';
-            const fmt = (v, k) => (parseFloat(v) > TH[k]) ? `<span class="exceed">${v}</span>` : v;
-
-            fullData.filter(d => (filter==='ALL' || d.type===filter || d.name===filter)).forEach(d => {
-                const isRoad = d.type === "路邊";
-                const tag = `<span class="tag ${isRoad?'tag-roadside':'tag-general'}">${d.type}</span>`;
-                tHTML += `<tr><td><strong>${d.name}</strong></td><td>${tag}</td><td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td><td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td></tr>`;
-                mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}"><div class="card-header">${d.name}${tag}</div><div class="grid"><div class="item"><span class="label">NO₂</span><span class="val">${fmt(d.no2,'no2')}</span></div><div class="item"><span class="label">O₃</span><span class="val">${fmt(d.o3,'o3')}</span></div><div class="item"><span class="label">SO₂</span><span class="val">${fmt(d.so2,'so2')}</span></div><div class="item"><span class="label">PM₁₀</span><span class="val">${fmt(d.pm10,'pm10')}</span></div><div class="item"><span class="label">PM₂.₅</span><span class="val">${fmt(d.pm25,'pm25')}</span></div></div></div>`;
-            });
-            tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
-        }
-    </script>
-</head>
-<body>
-
-    <div class="header-section">
-        <h1>香港空氣監測</h1>
-        <select id="station-selector" onchange="render(this.value)">
-            <option value="ALL">--- 顯示所有地區 ---</option>
-            <option value="路邊">只看「路邊監測站」</option>
-            <option value="一般">只看「一般監測站」</option>
-        </select>
-        <div class="status-bar">
-            最後更新: <span id="update-time">--:--</span> | 
-            <button onclick="loadData()" style="border:none;background:none;color:var(--p);font-weight:bold;cursor:pointer;">🔄 重新整理</button>
-            <div id="debug-info"></div>
-        </div>
-    </div>
-
-    <div class="desktop-view">
-        <table>
-            <thead><tr><th>測站</th><th>類型</th><th>NO₂</th><th>O₃</th><th>SO₂</th><th>PM₁₀</th><th>PM₂.₅</th></tr></thead>
-            <tbody id="table-body"></tbody>
-        </table>
-    </div>
-    <div id="mobile-list" class="mobile-view"></div>
-
-    <script>
-        // 網頁底部自動執行第一次載入
-        window.onload = loadData;
-    </script>
-</body>
-</html>
+            const fmt = (v, k) => (v !== "-" && parseFloat(v) >
