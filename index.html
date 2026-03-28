@@ -3,62 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>香港即時空氣污染物監測 (自動適應版)</title>
+    <title>香港空氣監測 - 智能檢索版</title>
     <style>
         :root { 
             --p: #0056b3; --bg: #f0f2f5; --red: #d9534f; --btn: #28a745; --white: #ffffff;
+            --general: #17a2b8; --roadside: #6f42c1;
         }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: #333; }
-        h1 { text-align: center; font-size: 1.5rem; margin: 10px 0; }
         
-        .controls { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
-        #refresh-btn { background: var(--btn); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .status-box { font-size: 0.85rem; color: #666; text-align: left; }
-        #update-time { color: var(--p); font-weight: bold; }
+        /* 頂部控制區 */
+        .header-section { position: sticky; top: 0; background: var(--bg); z-index: 100; padding-bottom: 10px; }
+        h1 { text-align: center; font-size: 1.4rem; margin: 10px 0; }
+        
+        .search-container { display: flex; flex-direction: column; gap: 10px; max-width: 600px; margin: 0 auto 15px; }
+        #search-input { padding: 12px; border: 2px solid #ddd; border-radius: 25px; font-size: 1rem; outline: none; transition: border 0.3s; }
+        #search-input:focus { border-color: var(--p); }
 
-        /* --- 電腦版表格樣式 --- */
-        .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow: hidden; display: block; }
+        .filter-group { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+        .filter-btn { padding: 6px 12px; border: none; border-radius: 15px; background: #ddd; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
+        .filter-btn.active { background: var(--p); color: white; }
+
+        .status-bar { text-align: center; font-size: 0.8rem; color: #666; margin-bottom: 15px; }
+
+        /* 測站標籤 Style */
+        .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; vertical-align: middle; }
+        .tag-general { background: var(--general); }
+        .tag-roadside { background: var(--roadside); }
+
+        /* 電腦版表格 */
+        .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow: hidden; display: block; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
-        th { background: var(--p); color: white; }
+        th { background: var(--p); color: white; position: sticky; top: 0; }
 
-        /* --- 手機版卡片樣式 --- */
-        .mobile-view { display: none; } /* 預設收埋 */
-        .station-card { background: var(--white); border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .card-header { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; }
-        .card-time { font-size: 0.75rem; color: #999; }
+        /* 手機版卡片 */
+        .mobile-view { display: none; }
+        .station-card { background: var(--white); border-radius: 15px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 5px solid transparent; }
+        .card-header { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .item { text-align: center; padding: 8px 0; background: #fafafa; border-radius: 8px; }
+        .item { text-align: center; padding: 6px 0; background: #fafafa; border-radius: 8px; }
         .label { font-size: 0.65rem; color: #888; display: block; }
         .val { font-size: 0.95rem; font-weight: 600; }
+        .exceed { color: var(--red); }
 
-        .exceed { color: var(--red); font-weight: bold; }
-
-        /* --- 自動切換邏輯 (Media Query) --- */
         @media (max-width: 768px) {
-            .desktop-view { display: none; } /* 手機就收埋個表 */
-            .mobile-view { display: block; }  /* 手機就顯示卡片 */
-            h1 { font-size: 1.2rem; }
-            .controls { flex-direction: column; text-align: center; }
+            .desktop-view { display: none; }
+            .mobile-view { display: block; }
         }
     </style>
 </head>
 <body>
 
-    <h1>香港空氣污染物監測</h1>
+    <div class="header-section">
+        <h1>香港空氣污染物監測</h1>
+        
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="🔍 輸入地區名稱 (例如: 觀塘, 旺角)..." oninput="filterData()">
+            <div class="filter-group">
+                <button class="filter-btn active" onclick="setFilter('ALL', this)">全部</button>
+                <button class="filter-btn" onclick="setFilter('一般', this)">一般測站</button>
+                <button class="filter-btn" onclick="setFilter('路邊', this)">路邊測站</button>
+            </div>
+        </div>
 
-    <div class="controls">
-        <button id="refresh-btn" onclick="loadData()">🔄 立即更新數據</button>
-        <div class="status-box">
-            <span id="status-msg">同步中...</span><br>
-            最後更新：<span id="update-time">--:--:--</span>
+        <div class="status-bar">
+            最後更新: <span id="update-time">--:--</span> | 
+            <a href="javascript:void(0)" onclick="loadData()" style="color:var(--btn); text-decoration:none; font-weight:bold;">🔄 點擊重載</a>
         </div>
     </div>
 
     <div class="desktop-view">
         <table>
             <thead>
-                <tr><th>測站</th><th>時間</th><th>NO₂</th><th>O₃</th><th>SO₂</th><th>CO</th><th>PM₁₀</th><th>PM₂.₅</th></tr>
+                <tr><th>測站</th><th>類型</th><th>NO₂</th><th>O₃</th><th>SO₂</th><th>PM₁₀</th><th>PM₂.₅</th></tr>
             </thead>
             <tbody id="table-body"></tbody>
         </table>
@@ -67,74 +84,81 @@
     <div id="mobile-list" class="mobile-view"></div>
 
     <script>
-        const TH = { no2: 200, o3: 160, so2: 50, co: 10000, pm10: 100, pm25: 50 };
+        let fullData = []; // 儲存所有提取到的數據
+        let currentFilterType = 'ALL';
+        const TH = { no2: 200, o3: 160, so2: 50, pm10: 100, pm25: 50 };
+
+        // 判定測站類型 (根據環保署分佈)
+        function getStationType(name) {
+            const roadside = ["銅鑼灣", "中環", "旺角"];
+            return roadside.includes(name) ? "路邊" : "一般";
+        }
+
         function fmt(v, t) {
             let n = parseFloat(v);
             return (!isNaN(n) && n > TH[t]) ? `<span class="exceed">${v}</span>` : v;
         }
 
         async function loadData() {
-            const btn = document.getElementById('refresh-btn');
-            btn.disabled = true;
             try {
                 const res = await fetch('data.xml?v=' + Date.now());
                 const txt = await res.text();
                 const xml = new DOMParser().parseFromString(txt, "text/xml");
                 const items = xml.getElementsByTagName("PollutantConcentration");
                 
-                const tableBody = document.getElementById('table-body');
-                const mobileList = document.getElementById('mobile-list');
-                tableBody.innerHTML = '';
-                mobileList.innerHTML = '';
-
-                let map = {};
+                fullData = [];
                 for (let i = 0; i < items.length; i++) {
                     const s = items[i].getElementsByTagName("StationName")[0].textContent;
-                    map[s] = {
-                        t: items[i].getElementsByTagName("DateTime")[0].textContent.replace(' +0800', ''),
+                    fullData.push({
+                        name: s,
+                        type: getStationType(s),
                         no2: items[i].getElementsByTagName("二氧化氮")[0].textContent,
                         o3:  items[i].getElementsByTagName("臭氧")[0].textContent,
                         so2: items[i].getElementsByTagName("二氧化硫")[0].textContent,
-                        co:  items[i].getElementsByTagName("一氧化碳")[0].textContent,
                         pm10: items[i].getElementsByTagName("可吸入懸浮粒子")[0].textContent,
                         pm25: items[i].getElementsByTagName("細顆粒物")[0].textContent
-                    };
+                    });
                 }
-
-                Object.keys(map).sort().forEach(k => {
-                    const d = map[k];
-                    const timeOnly = d.t.split(' ')[4]; // 只攞時間部分
-
-                    // 渲染電腦版
-                    tableBody.innerHTML += `<tr>
-                        <td><strong>${k}</strong></td><td>${d.t}</td>
-                        <td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td>
-                        <td>${fmt(d.co,'co')}</td><td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td>
-                    </tr>`;
-
-                    // 渲染手機版
-                    mobileList.innerHTML += `
-                        <div class="station-card">
-                            <div class="card-header">${k} <span class="card-time">${timeOnly}</span></div>
-                            <div class="grid">
-                                <div class="item"><span class="label">NO₂</span><span class="val">${fmt(d.no2,'no2')}</span></div>
-                                <div class="item"><span class="label">O₃</span><span class="val">${fmt(d.o3,'o3')}</span></div>
-                                <div class="item"><span class="label">SO₂</span><span class="val">${fmt(d.so2,'so2')}</span></div>
-                                <div class="item"><span class="label">PM₁₀</span><span class="val">${fmt(d.pm10,'pm10')}</span></div>
-                                <div class="item"><span class="label">PM₂.₅</span><span class="val">${fmt(d.pm25,'pm25')}</span></div>
-                                <div class="item"><span class="label">CO</span><span class="val">${fmt(d.co,'co')}</span></div>
-                            </div>
-                        </div>`;
-                });
-
-                document.getElementById('status-msg').innerText = "數據已成功同步";
+                fullData.sort((a, b) => a.name.localeCompare(b.name, 'zh-HK'));
+                render();
                 document.getElementById('update-time').innerText = new Date().toLocaleTimeString();
-            } catch (e) {
-                document.getElementById('status-msg').innerText = "讀取失敗：" + e.message;
-            } finally { btn.disabled = false; }
+            } catch (e) { alert("讀取失敗"); }
         }
-        loadData();
-        setInterval(loadData, 900000);
-    </script>
-</body>
-</html>
+
+        function setFilter(type, btn) {
+            currentFilterType = type;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            filterData();
+        }
+
+        function filterData() {
+            const query = document.getElementById('search-input').value.trim().toLowerCase();
+            const filtered = fullData.filter(d => {
+                const matchSearch = d.name.toLowerCase().includes(query);
+                const matchType = (currentFilterType === 'ALL' || d.type === currentFilterType);
+                return matchSearch && matchType;
+            });
+            render(filtered);
+        }
+
+        function render(data = fullData) {
+            const tBody = document.getElementById('table-body');
+            const mList = document.getElementById('mobile-list');
+            tBody.innerHTML = ''; mList.innerHTML = '';
+
+            data.forEach(d => {
+                const typeTag = d.type === "路邊" ? '<span class="tag tag-roadside">路邊</span>' : '<span class="tag tag-general">一般</span>';
+                
+                // 電腦版
+                tBody.innerHTML += `<tr>
+                    <td><strong>${d.name}</strong></td><td>${typeTag}</td>
+                    <td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td>
+                    <td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td>
+                </tr>`;
+
+                // 手機版
+                mList.innerHTML += `
+                    <div class="station-card" style="border-left-color: ${d.type==='路邊'?'var(--roadside)':'var(--general)'}">
+                        <div class="card-header">${d.name} ${typeTag}</div>
+                        <div class="grid
