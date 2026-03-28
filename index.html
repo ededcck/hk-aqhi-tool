@@ -10,7 +10,9 @@
         .header-section { position: sticky; top: 0; background: var(--bg); z-index: 100; padding: 10px; border-bottom: 2px solid #ddd; text-align: center; }
         h1 { font-size: 1.3rem; margin: 5px 0; }
         select { padding: 12px; border: 2px solid var(--p); border-radius: 10px; font-size: 1rem; width: 100%; max-width: 400px; margin: 10px auto; display: block; }
-        .status-bar { font-size: 0.8rem; color: #666; margin-top: 5px; }
+        .status-bar { font-size: 0.85rem; color: #555; margin-top: 5px; line-height: 1.6; }
+        #xml-date { font-weight: bold; color: #333; }
+        #manual-time { color: var(--p); font-weight: bold; }
         #debug-info { color: var(--red); font-weight: bold; margin-top: 5px; font-size: 0.9rem; }
         .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; }
         .tag-general { background: var(--general); }
@@ -22,7 +24,6 @@
         .mobile-view { display: none; margin-top: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 5px solid #ccc; }
         .card-header { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .time-label { font-size: 0.8rem; color: #666; font-weight: normal; margin-left: 5px; }
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
         .item { text-align: center; padding: 6px 0; background: #fafafa; border-radius: 8px; }
         .label { font-size: 0.65rem; color: #888; display: block; }
@@ -37,8 +38,9 @@
 
         async function loadData() {
             const debug = document.getElementById('debug-info');
-            const updateTime = document.getElementById('update-time');
-            debug.innerText = "讀取最新空氣質素...";
+            const xmlDateSpan = document.getElementById('xml-date');
+            const manualTimeSpan = document.getElementById('manual-time');
+            debug.innerText = "同步中...";
             debug.style.display = "block";
 
             try {
@@ -49,21 +51,27 @@
                 const xml = new DOMParser().parseFromString(txt, "text/xml");
                 const items = xml.getElementsByTagName("PollutantConcentration");
                 
-                // 用嚟暫存每一區最新嘅時間同數據
                 const tempMap = {}; 
+                let maxDateObj = new Date(0); // 用嚟搵 XML 入面最新嘅日期時間
+                let maxDateStr = "-- --- ---- --:--";
 
                 for (let i = 0; i < items.length; i++) {
                     const name = items[i].getElementsByTagName("StationName")[0].textContent;
                     const dateTimeStr = items[i].getElementsByTagName("DateTime")[0].textContent;
-                    // 將時間字串轉做 Date 物件嚟比較
                     const currentTime = new Date(dateTimeStr.replace(' +0800', ''));
 
-                    // 如果呢個地區仲未有紀錄，或者呢條紀錄比之前存低嘅更「新」
+                    // 搵出成份 XML 最新嗰個時間點
+                    if (currentTime > maxDateObj) {
+                        maxDateObj = currentTime;
+                        // 轉換格式為 "29 Mar 2026 01:00"
+                        const parts = dateTimeStr.split(' ');
+                        maxDateStr = `${parts[0]} ${parts[1]} ${parts[2]} ${parts[4].substring(0,5)}`;
+                    }
+
                     if (!tempMap[name] || currentTime > tempMap[name].rawTime) {
                         tempMap[name] = {
                             name: name,
                             rawTime: currentTime,
-                            displayTime: dateTimeStr.split(' ')[4].substring(0, 5), // 攞出 "14:00" 格式
                             type: ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般",
                             no2: items[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
                             o3:  items[i].getElementsByTagName("臭氧")[0]?.textContent || "-",
@@ -76,7 +84,7 @@
 
                 latestData = tempMap;
 
-                // 更新下拉選單
+                // 更新選單
                 const selector = document.getElementById('station-selector');
                 while (selector.options.length > 3) selector.remove(3);
                 Object.keys(latestData).sort().forEach(name => {
@@ -84,7 +92,13 @@
                 });
 
                 render('ALL');
-                updateTime.innerText = new Date().toLocaleTimeString();
+                
+                // 顯示 XML 上的最新時間
+                xmlDateSpan.innerText = maxDateStr;
+                // 顯示手動更新時間 (24小時制 + 秒)
+                const now = new Date();
+                manualTimeSpan.innerText = now.toTimeString().split(' ')[0];
+                
                 debug.style.display = "none";
             } catch (e) {
                 debug.innerText = "❌ " + e.message;
@@ -97,14 +111,12 @@
             let tHTML = '', mHTML = '';
             const fmt = (v, k) => (v !== "-" && parseFloat(v) > TH[k]) ? `<span class="exceed">${v}</span>` : v;
 
-            const dataArray = Object.values(latestData);
-
-            dataArray.filter(d => (filter==='ALL' || d.type===filter || d.name===filter)).forEach(d => {
+            Object.values(latestData).filter(d => (filter==='ALL' || d.type===filter || d.name===filter)).forEach(d => {
                 const isRoad = d.type === "路邊";
                 const tag = `<span class="tag ${isRoad?'tag-roadside':'tag-general'}">${d.type}</span>`;
                 
                 tHTML += `<tr>
-                    <td><strong>${d.name}</strong><span class="time-label">(${d.displayTime})</span></td>
+                    <td><strong>${d.name}</strong></td>
                     <td>${tag}</td>
                     <td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td>
                     <td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td>
@@ -112,10 +124,7 @@
                 
                 mHTML += `
                     <div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}">
-                        <div class="card-header">
-                            <span>${d.name} ${tag}</span>
-                            <span class="time-label">${d.displayTime}</span>
-                        </div>
+                        <div class="card-header">${d.name} ${tag}</div>
                         <div class="grid">
                             <div class="item"><span class="label">NO₂</span><span class="val">${fmt(d.no2,'no2')}</span></div>
                             <div class="item"><span class="label">O₃</span><span class="val">${fmt(d.o3,'o3')}</span></div>
@@ -125,7 +134,6 @@
                         </div>
                     </div>`;
             });
-            
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
         }
         window.onload = loadData;
@@ -133,15 +141,16 @@
 </head>
 <body>
     <div class="header-section">
-        <h1>香港空氣監測 (即時數據版)</h1>
+        <h1>香港空氣監測</h1>
         <select id="station-selector" onchange="render(this.value)">
             <option value="ALL">--- 顯示所有地區 ---</option>
             <option value="路邊">只看「路邊監測站」</option>
             <option value="一般">只看「一般監測站」</option>
         </select>
         <div class="status-bar">
-            系統時間: <span id="update-time">--:--</span> | 
+            系統時間: <span id="xml-date">-- --- ---- --:--</span> | 
             <button onclick="loadData()" style="border:none;background:none;color:var(--p);font-weight:bold;cursor:pointer;">🔄 更新</button>
+            [<span id="manual-time">--:--:--</span>]
             <div id="debug-info"></div>
         </div>
     </div>
