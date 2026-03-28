@@ -1,26 +1,26 @@
 name: Sync AQHI Data
+
 on:
   schedule:
-    - cron: '*/30 * * * *' # 每 30 分鐘自動執行一次
-  workflow_dispatch:      # 畀你手動撳掣執行
+    - cron: '*/30 * * * *' # 每 30 分鐘更新一次
+  workflow_dispatch:
 
 jobs:
-  download:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write    # 畀權限佢寫入 data.xml
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
 
-      - name: Download XML from EPD
-        run: |
-          curl -s "https://www.aqhi.gov.hk/epd/ddata/html/out/24pc_ChT.xml" -o data.xml
+      - name: Download Pollutant Data
+        run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/aqhi_xml_ChT.xml" -o data.xml
 
-      - name: Commit and Push
+      - name: Download AQHI Index Data
+        run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/aqhi_ind_rss_ChT.xml" -o aqhi_index.xml
+
+      - name: Commit and push if changed
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          git add data.xml
-          git commit -m "Update AQHI data" || exit 0
-          git push
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data.xml aqhi_index.xml
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update AQHI and Pollutant data" && git push)
