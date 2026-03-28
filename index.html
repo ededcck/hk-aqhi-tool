@@ -22,7 +22,6 @@
         td { padding: 12px 5px; text-align: center; border-bottom: 1px solid #eee; font-size: 0.9rem; }
         .sub-label { display: block; font-size: 0.65rem; font-weight: normal; opacity: 0.8; margin-top: 2px; }
         .temp-val { color: var(--red); font-weight: bold; font-size: 1.15rem; }
-        .exceed { color: var(--red); font-weight: bold; }
         .aqhi-level-icon { height: 1.8rem; vertical-align: middle; }
 
         /* 手機版卡片 */
@@ -31,8 +30,8 @@
         .card-header { border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
         .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .card-item { background: #f8f9fa; padding: 8px; border-radius: 8px; text-align: center; border: 1px solid #f0f0f0; }
-        .card-label { font-size: 0.65rem; color: #777; display: block; margin-bottom: 3px; }
-        .card-val { font-size: 0.9rem; font-weight: bold; color: #333; }
+        .card-label { font-size: 0.62rem; color: #777; display: block; margin-bottom: 3px; line-height: 1.2; }
+        .card-val { font-size: 0.85rem; font-weight: bold; color: #333; }
 
         @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
     </style>
@@ -53,10 +52,10 @@
             const tBody = document.getElementById('table-body');
             const mList = document.getElementById('mobile-list');
             
-            if(tBody) tBody.innerHTML = "<tr><td colspan='9'>正在抓取最新數據...</td></tr>";
+            if(tBody) tBody.innerHTML = "<tr><td colspan='9'>數據更新中...</td></tr>";
+            if(mList) mList.innerHTML = "<p style='text-align:center'>數據更新中...</p>";
             timeLabel.innerText = "連線中...";
 
-            // 強力破快取字串
             const bust = "?t=" + Date.now() + "&r=" + Math.random().toString(36).substring(7);
             const fetchOpt = { 
                 cache: "no-store", 
@@ -123,10 +122,10 @@
                 mHTML += `<div class="station-card" style="border-left-color:${type==='路邊'?'#6f42c1':'#17a2b8'}">
                     <div class="card-header"><span>${name} (${type})</span><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></div>
                     <div class="card-grid">
-                        <div class="card-item"><span class="card-label">NO₂ / O₃</span><span class="card-val">${d[0]} / ${d[1]}</span></div>
-                        <div class="card-item"><span class="card-label">SO₂ / CO</span><span class="card-val">${d[2]} / ${d[3]}</span></div>
-                        <div class="card-item"><span class="card-label">PM₁₀</span><span class="card-val">${d[4]}</span></div>
-                        <div class="card-item"><span class="card-label">PM₂.₅</span><span class="card-val">${d[5]}</span></div>
+                        <div class="card-item"><span class="card-label">二氧化氮 NO₂ / 臭氧 O₃</span><span class="card-val">${d[0]} / ${d[1]}</span></div>
+                        <div class="card-item"><span class="card-label">二氧化硫 SO₂ / 一氧化碳 CO</span><span class="card-val">${d[2]} / ${d[3]}</span></div>
+                        <div class="card-item"><span class="card-label">可吸入粒子 PM₁₀</span><span class="card-val">${d[4]}</span></div>
+                        <div class="card-item"><span class="card-label">細顆粒物 PM₂.₅</span><span class="card-val">${d[5]}</span></div>
                     </div></div>`;
             }
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
@@ -136,8 +135,7 @@
             const tBody = document.getElementById('table-body');
             const mList = document.getElementById('mobile-list');
             
-            // 網頁版 Row 次序：氣溫 > 濕度 > 最高/最低 > 氣溫變幅 > 風速(風向) > 陣風 > 氣壓 > 草地溫
-            document.getElementById('table-head').innerHTML = `<tr><th class="weather-th">地區</th><th class="weather-th">氣溫</th><th class="weather-th">濕度</th><th class="weather-th">最高/最低</th><th class="weather-th">氣溫變幅</th><th class="weather-th">風速(風向)</th><th class="weather-th">陣風</th><th class="weather-th">氣壓</th><th class="weather-th">草地溫</th></tr>`;
+            document.getElementById('table-head').innerHTML = `<tr><th class="weather-th">地區</th><th class="weather-th">氣溫</th><th class="weather-th">相對濕度</th><th class="weather-th">最高/最低</th><th class="weather-th">氣溫變幅</th><th class="weather-th">風速(風向)</th><th class="weather-th">陣風</th><th class="weather-th">氣壓</th><th class="weather-th">草地溫</th></tr>`;
             
             let tHTML = '', mHTML = '';
             datas.forEach(row => {
@@ -146,7 +144,6 @@
                 
                 tHTML += `<tr><td><strong>${name}</strong></td><td class="temp-val">${row[1]}°C</td><td>${row[2]}%</td><td>${row[5]}°C / ${row[6]}°C</td><td>${row[7]}°C</td><td>${row[4]} km/h (${row[3]})</td><td>${row[8]?row[8]+' km/h':'-'}</td><td>${row[9]?row[9]+' hPa':'-'}</td><td>${row[10]?row[10]+'°C':'-'}</td></tr>`;
                 
-                // 手機版：Header 右邊大字氣溫，第一行 最高/最低 + 濕度，第二行 風速 + 氣壓
                 mHTML += `<div class="station-card" style="border-left-color:var(--weather)">
                     <div class="card-header"><span>${name}</span><span class="temp-val">${row[1]}°C</span></div>
                     <div class="card-grid">
