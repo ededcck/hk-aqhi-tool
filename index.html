@@ -17,7 +17,7 @@
         .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; }
         .tag-general { background: var(--general); }
         .tag-roadside { background: var(--roadside); }
-        .aqhi-val { font-weight: 900; font-size: 1.3rem; color: #000; }
+        .aqhi-val { font-weight: 900; font-size: 1.4rem; color: #e67e22; }
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
@@ -41,36 +41,32 @@
 
         async function loadData() {
             const debug = document.getElementById('debug-info');
-            debug.innerText = "同步數據中...";
+            debug.innerText = "正在讀取數據...";
             debug.style.display = "block";
 
             try {
-                // 讀取本地 GitHub 檔案
                 const [resP, resA] = await Promise.all([
                     fetch('data.xml?v=' + Date.now()),
                     fetch('aqhi_index.xml?v=' + Date.now())
                 ]);
 
-                if (!resP.ok || !resA.ok) throw new Error("XML 檔案讀取失敗，請確認 GitHub Actions 已執行");
+                if (!resP.ok || !resA.ok) throw new Error("XML 載入失敗，請確認 GitHub Actions 已執行成功");
 
                 const xmlP = new DOMParser().parseFromString(await resP.text(), "text/xml");
                 const xmlA = new DOMParser().parseFromString(await resA.text(), "text/xml");
 
-                // 1. 解析 AQHI (處理 RSS 格式嘅 description)
-                const aqhiMap = {};
+                // 1. 建立 AQHI 對照表 (使用模糊配對邏輯)
+                const aqhiRaw = [];
                 const itemsA = xmlA.getElementsByTagName("item");
                 for (let i = 0; i < itemsA.length; i++) {
                     const desc = itemsA[i].getElementsByTagName("description")[0]?.textContent || "";
-                    // 格式通常係 "中西區 : 3"
-                    if (desc.includes(" : ")) {
-                        const parts = desc.split(" : ");
-                        const zoneName = parts[0].trim();
-                        const indexVal = parts[1].trim();
-                        aqhiMap[zoneName] = indexVal;
-                    }
+                    // 攞走所有空白，統一格式
+                    const cleanDesc = desc.replace(/\s+/g, ""); 
+                    aqhiRaw.push(cleanDesc);
                 }
+                console.log("AQHI 原始數據:", aqhiRaw);
 
-                // 2. 解析污染物
+                // 2. 解析污染物並配對 AQHI
                 const itemsP = xmlP.getElementsByTagName("PollutantConcentration");
                 const tempMap = {}; 
                 stationOrder = [];
@@ -89,10 +85,22 @@
 
                     if (!stationOrder.includes(name)) stationOrder.push(name);
 
+                    // 模糊配對 AQHI：喺 aqhiRaw 陣列入面搵邊條字串包含咗個地區名
+                    let foundAQHI = "-";
+                    for (let rawStr of aqhiRaw) {
+                        if (rawStr.includes(name)) {
+                            const splitParts = rawStr.split(":");
+                            if (splitParts.length > 1) {
+                                foundAQHI = splitParts[1];
+                                break;
+                            }
+                        }
+                    }
+
                     if (!tempMap[name] || cTime > tempMap[name].rawTime) {
                         tempMap[name] = {
                             name, 
-                            aqhi: aqhiMap[name] || "-", // 這裡進行配對
+                            aqhi: foundAQHI, 
                             rawTime: cTime,
                             type: ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般",
                             no2: itemsP[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
@@ -114,7 +122,8 @@
                 document.getElementById('manual-time').innerText = new Date().toTimeString().split(' ')[0];
                 debug.style.display = "none";
             } catch (e) {
-                debug.innerText = "❌ 錯誤: " + e.message;
+                debug.innerText = "❌ 系統錯誤: " + e.message;
+                console.error(e);
             }
         }
 
