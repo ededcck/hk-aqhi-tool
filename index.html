@@ -7,8 +7,13 @@
     <style>
         :root { --p: #0056b3; --bg: #f0f2f5; --red: #d9534f; --white: #ffffff; --general: #17a2b8; --roadside: #6f42c1; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 10px; color: #333; }
-        .header-section { position: sticky; top: 0; background: var(--bg); z-index: 100; padding: 10px; border-bottom: 2px solid #ddd; text-align: center; }
-        h1 { font-size: 1.3rem; margin: 5px 0; }
+        
+        /* 頂部 Header 改動 */
+        .header-section { position: sticky; top: 0; background: var(--bg); z-index: 100; padding: 15px 10px; border-bottom: 2px solid #ddd; text-align: center; }
+        .logo-link { display: inline-block; text-decoration: none; transition: opacity 0.2s; }
+        .logo-link:hover { opacity: 0.8; }
+        .main-logo { height: 45px; width: auto; max-width: 90%; margin-bottom: 5px; }
+        
         select { padding: 12px; border: 2px solid var(--p); border-radius: 10px; font-size: 1rem; width: 100%; max-width: 400px; margin: 10px auto; display: block; }
         .status-bar { font-size: 0.85rem; color: #555; margin-top: 5px; line-height: 1.6; }
         
@@ -16,16 +21,9 @@
         .tag-general { background: var(--general); }
         .tag-roadside { background: var(--roadside); }
         
-        /* AQHI 樣式 */
-        .aqhi-container { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 30px; }
-        .aqhi-num { font-weight: 900; font-size: 1.2rem; } 
-        .aqhi-icon { height: 1.4rem; width: auto; vertical-align: middle; }
-
-        .clr-low { color: green; }
-        .clr-mid { color: orange; }
-        .clr-high { color: red; }
-        .clr-vhigh { color: brown; }
-        .clr-serious { color: black; }
+        /* AQHI Level Icon 樣式 */
+        .aqhi-container { display: flex; align-items: center; justify-content: center; min-height: 45px; }
+        .aqhi-level-icon { height: 2.4rem; width: auto; vertical-align: middle; }
 
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
@@ -41,7 +39,12 @@
         .item { text-align: center; padding: 8px 0; background: #fafafa; border-radius: 8px; }
         .label { font-size: 0.7rem; color: #666; display: block; }
         .val { font-size: 1rem; font-weight: bold; }
-        @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
+        
+        @media (max-width: 768px) { 
+            .desktop-view { display: none; } 
+            .mobile-view { display: block; } 
+            .main-logo { height: 35px; } /* 手機版 Logo 縮細少少廢事佔位 */
+        }
     </style>
 
     <script>
@@ -49,38 +52,17 @@
         let stationOrder = []; 
         const TH = { no2: 200, o3: 160, so2: 50, pm10: 100, pm25: 50 };
 
-        const ICON_URLS = {
-            "低": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_1.svg",
-            "中": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_2.svg",
-            "高": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_3.svg",
-            "甚高": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_4.svg",
-            "嚴重": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_5.svg"
-        };
-
         function formatAQHI(rawStr) {
             if (!rawStr || rawStr === "-") return "-";
-            
-            // 更強大的提取邏輯：尋找數字(+號)同埋程度字眼
-            const numMatch = rawStr.match(/(\d+\+?)/);
-            const textMatch = rawStr.match(/(低|中|高|甚高|嚴重)/);
-            
+            const numMatch = rawStr.match(/(\d+)/);
+            const isPlus = rawStr.includes("+");
+            const isSerious = rawStr.includes("嚴重");
             if (!numMatch) return "-";
-
-            const valStr = numMatch[0];
-            const valNum = parseInt(valStr);
-            const levelText = textMatch ? textMatch[0] : "";
-            
-            let colorClass = "";
-            if (valStr.includes("+") || valNum > 10 || levelText === "嚴重") colorClass = "clr-serious";
-            else if (valNum >= 8) colorClass = "clr-vhigh";
-            else if (valNum === 7) colorClass = "clr-high";
-            else if (valNum >= 4) colorClass = "clr-mid";
-            else colorClass = "clr-low";
-
-            const iconUrl = ICON_URLS[levelText] || "";
-            const iconHtml = iconUrl ? `<img src="${iconUrl}" class="aqhi-icon">` : "";
-
-            return `<div class="aqhi-container"><span class="aqhi-num ${colorClass}">${valStr}</span> ${iconHtml}</div>`;
+            let level = parseInt(numMatch[0]);
+            if (isPlus || isSerious || level > 10) level = 11;
+            else if (level < 1) level = 1;
+            const iconUrl = `https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${level}.svg`;
+            return `<div class="aqhi-container"><img src="${iconUrl}" class="aqhi-level-icon" alt="Level ${level}"></div>`;
         }
 
         async function loadData() {
@@ -89,51 +71,37 @@
                     fetch('data.xml?v=' + Date.now()),
                     fetch('aqhi_index.xml?v=' + Date.now())
                 ]);
-
                 const xmlP = new DOMParser().parseFromString(await resP.text(), "text/xml");
                 const xmlA = new DOMParser().parseFromString(await resA.text(), "text/xml");
-
-                // 解析 AQHI RSS (改用全方位搜尋)
                 const aqhiSource = [];
                 const itemsA = xmlA.getElementsByTagName("item");
                 for (let i = 0; i < itemsA.length; i++) {
-                    const desc = itemsA[i].getElementsByTagName("description")[0]?.textContent || "";
-                    aqhiSource.push(desc);
+                    aqhiSource.push(itemsA[i].getElementsByTagName("description")[0]?.textContent || "");
                 }
-
                 const itemsP = xmlP.getElementsByTagName("PollutantConcentration");
                 const tempMap = {}; 
                 stationOrder = [];
                 let maxDateStr = "-- --- ---- --:--", maxDateObj = new Date(0);
-
                 for (let i = 0; i < itemsP.length; i++) {
                     const name = itemsP[i].getElementsByTagName("StationName")[0].textContent.trim();
                     const dtStr = itemsP[i].getElementsByTagName("DateTime")[0].textContent;
                     const cTime = new Date(dtStr.replace(' +0800', ''));
-
                     if (cTime > maxDateObj) {
                         maxDateObj = cTime;
                         const p = dtStr.split(' ');
                         maxDateStr = `${p[0]} ${p[1]} ${p[2]} ${p[4].substring(0,5)}`;
                     }
-
                     if (!stationOrder.includes(name)) stationOrder.push(name);
-
-                    // 在 AQHI 數據中模糊搜尋測站名稱
                     let rawAQHI = "-";
                     for (let desc of aqhiSource) {
-                        // 檢查 description 是否包含該站名
                         if (desc.includes(name)) {
                             rawAQHI = desc;
                             break;
                         }
                     }
-
                     if (!tempMap[name] || cTime > tempMap[name].rawTime) {
                         tempMap[name] = {
-                            name, 
-                            aqhiHtml: formatAQHI(rawAQHI), 
-                            rawTime: cTime,
+                            name, aqhiHtml: formatAQHI(rawAQHI), rawTime: cTime,
                             type: ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般",
                             no2: itemsP[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
                             o3:  itemsP[i].getElementsByTagName("臭氧")[0]?.textContent || "-",
@@ -143,18 +111,14 @@
                         };
                     }
                 }
-
                 latestData = tempMap;
                 const selector = document.getElementById('station-selector');
                 while (selector.options.length > 3) selector.remove(3);
                 stationOrder.forEach(name => selector.add(new Option(name, name)));
-
                 render('ALL');
                 document.getElementById('xml-date').innerText = maxDateStr;
                 document.getElementById('manual-time').innerText = new Date().toTimeString().split(' ')[0];
-            } catch (e) {
-                console.error("加載失敗:", e);
-            }
+            } catch (e) { console.error("加載失敗", e); }
         }
 
         function render(filter) {
@@ -162,14 +126,12 @@
             const mList = document.getElementById('mobile-list');
             let tHTML = '', mHTML = '';
             const fmt = (v, k) => (v !== "-" && parseFloat(v) > TH[k]) ? `<span class="exceed">${v}</span>` : v;
-
             stationOrder.forEach(name => {
                 const d = latestData[name];
                 if (!d || (filter !== 'ALL' && d.type !== filter && d.name !== filter)) return;
                 const isRoad = d.type === "路邊", tag = `<span class="tag ${isRoad?'tag-roadside':'tag-general'}">${d.type}</span>`;
-                
                 tHTML += `<tr><td><strong>${d.name}</strong></td><td>${tag}</td><td>${d.aqhiHtml}</td><td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td><td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td></tr>`;
-                mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}"><div class="card-header"><span>${d.name} ${tag}</span><div style="display:flex;align-items:center;gap:5px;">AQHI: ${d.aqhiHtml}</div></div><div class="grid"><div class="item"><span class="label">二氧化氮 (NO₂)</span><span class="val">${fmt(d.no2,'no2')}</span></div><div class="item"><span class="label">臭氧 (O₃)</span><span class="val">${fmt(d.o3,'o3')}</span></div><div class="item"><span class="label">二氧化硫 (SO₂)</span><span class="val">${fmt(d.so2,'so2')}</span></div><div class="item"><span class="label">可吸入粒子 (PM₁₀)</span><span class="val">${fmt(d.pm10,'pm10')}</span></div><div class="item" style="grid-column: span 2;"><span class="label">細顆粒物 (PM₂.₅)</span><span class="val">${fmt(d.pm25,'pm25')}</span></div></div></div>`;
+                mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}"><div class="card-header"><span>${d.name} ${tag}</span><div>${d.aqhiHtml}</div></div><div class="grid"><div class="item"><span class="label">二氧化氮 (NO₂)</span><span class="val">${fmt(d.no2,'no2')}</span></div><div class="item"><span class="label">臭氧 (O₃)</span><span class="val">${fmt(d.o3,'o3')}</span></div><div class="item"><span class="label">二氧化硫 (SO₂)</span><span class="val">${fmt(d.so2,'so2')}</span></div><div class="item"><span class="label">可吸入粒子 (PM₁₀)</span><span class="val">${fmt(d.pm10,'pm10')}</span></div><div class="item" style="grid-column: span 2;"><span class="label">細顆粒物 (PM₂.₅)</span><span class="val">${fmt(d.pm25,'pm25')}</span></div></div></div>`;
             });
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
         }
@@ -178,20 +140,40 @@
 </head>
 <body>
     <div class="header-section">
-        <h1>香港空氣監測</h1>
+        <a href="https://www.aqhi.gov.hk/tc/index.html" target="_blank" class="logo-link">
+            <img src="https://www.aqhi.gov.hk/common/images/logo_aqhi.svg" alt="AQHI Logo" class="main-logo">
+        </a>
+        
         <select id="station-selector" onchange="render(this.value)">
             <option value="ALL">--- 顯示所有地區 ---</option>
             <option value="路邊">只看「路邊監測站」</option>
             <option value="一般">只看「一般監測站」</option>
         </select>
-        <div class="status-bar">數據時間: <span id="xml-date">-- --- ---- --:--</span> | <button onclick="loadData()" style="border:none;background:none;color:var(--p);font-weight:bold;cursor:pointer;">🔄 更新</button> [<span id="manual-time">--:--:--</span>]</div>
+        <div class="status-bar">
+            數據時間: <span id="xml-date">-- --- ---- --:--</span> | 
+            <button onclick="loadData()" style="border:none;background:none;color:var(--p);font-weight:bold;cursor:pointer;">🔄 更新</button> 
+            [<span id="manual-time">--:--:--</span>]
+        </div>
     </div>
+
     <div class="desktop-view">
         <table>
-            <thead><tr><th>測站</th><th>類型</th><th style="background:#444">AQHI 指數</th><th>二氧化氮<span class="sub-label">(NO₂)</span></th><th>臭氧<span class="sub-label">(O₃)</span></th><th>二氧化硫<span class="sub-label">(SO₂)</span></th><th>可吸入粒子<span class="sub-label">(PM₁₀)</span></th><th>細顆粒物<span class="sub-label">(PM₂.₅)</span></th></tr></thead>
+            <thead>
+                <tr>
+                    <th>測站</th>
+                    <th>類型</th>
+                    <th style="background:#444; width: 140px;">AQHI</th>
+                    <th>二氧化氮<span class="sub-label">(NO₂)</span></th>
+                    <th>臭氧<span class="sub-label">(O₃)</span></th>
+                    <th>二氧化硫<span class="sub-label">(SO₂)</span></th>
+                    <th>可吸入粒子<span class="sub-label">(PM₁₀)</span></th>
+                    <th>細顆粒物<span class="sub-label">(PM₂.₅)</span></th>
+                </tr>
+            </thead>
             <tbody id="table-body"></tbody>
         </table>
     </div>
+
     <div id="mobile-list" class="mobile-view"></div>
 </body>
 </html>
