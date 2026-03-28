@@ -7,14 +7,11 @@
     <style>
         :root { --p: #0056b3; --bg: #f0f2f5; --red: #d9534f; --white: #ffffff; --general: #17a2b8; --roadside: #6f42c1; --weather: #28a745; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 0; color: #333; }
-        
         .sticky-wrapper { position: sticky; top: 0; z-index: 2000; background: var(--bg); padding: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header-section { text-align: center; }
         .main-logo { height: 35px; margin-bottom: 5px; }
         select { padding: 10px; border: 2px solid var(--p); border-radius: 8px; font-size: 1rem; width: 100%; max-width: 400px; margin: 5px auto; display: block; background: white; outline: none; }
         .status-bar { font-size: 0.8rem; color: #555; margin-top: 5px; text-align: center; }
-        
-        /* 網頁版表格 */
         .desktop-view { background: var(--white); margin: 10px; border-radius: 8px; overflow: visible; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1100px; }
         thead th { position: sticky; z-index: 1500; background: var(--p); color: white; font-size: 0.75rem; padding: 12px 5px; border-bottom: 2px solid rgba(0,0,0,0.1); white-space: nowrap; }
@@ -23,8 +20,6 @@
         .sub-label { display: block; font-size: 0.65rem; font-weight: normal; opacity: 0.8; margin-top: 2px; }
         .temp-val { color: var(--red); font-weight: bold; font-size: 1.15rem; }
         .aqhi-level-icon { height: 1.8rem; vertical-align: middle; }
-
-        /* 手機版卡片 */
         .mobile-view { display: none; padding: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 8px solid #ccc; }
         .card-header { border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
@@ -32,7 +27,6 @@
         .card-item { background: #f8f9fa; padding: 8px; border-radius: 8px; text-align: center; border: 1px solid #f0f0f0; }
         .card-label { font-size: 0.62rem; color: #777; display: block; margin-bottom: 3px; line-height: 1.2; }
         .card-val { font-size: 0.85rem; font-weight: bold; color: #333; }
-
         @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
     </style>
 
@@ -52,14 +46,23 @@
             const tBody = document.getElementById('table-body');
             const mList = document.getElementById('mobile-list');
             
-            if(tBody) tBody.innerHTML = "<tr><td colspan='9'>數據更新中...</td></tr>";
-            if(mList) mList.innerHTML = "<p style='text-align:center'>數據更新中...</p>";
+            if(tBody) tBody.innerHTML = "<tr><td colspan='9'>正在穿透快取獲取 07:00+ 數據...</td></tr>";
             timeLabel.innerText = "連線中...";
 
-            const bust = "?t=" + Date.now() + "&r=" + Math.random().toString(36).substring(7);
+            // 超強力破快取：時間戳 + 10位隨機字串
+            const nonce = Math.random().toString(36).substring(2, 12);
+            const bust = `?nocache=${Date.now()}_${nonce}`;
+            
             const fetchOpt = { 
-                cache: "no-store", 
-                headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } 
+                method: 'GET',
+                cache: "no-store",
+                priority: "high",
+                headers: { 
+                    'Cache-Control': 'no-cache, no-store, must-revalidate', 
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                },
+                referrerPolicy: "no-referrer"
             };
 
             try {
@@ -91,7 +94,6 @@
             const mList = document.getElementById('mobile-list');
             const itemsP = xmlP.getElementsByTagName("PollutantConcentration");
             const aqhiSource = Array.from(xmlA.getElementsByTagName("item")).map(i => i.getElementsByTagName("description")[0]?.textContent || "");
-
             let latestTimeStr = "";
             let maxObj = new Date(0);
             for (let i = 0; i < itemsP.length; i++) {
@@ -100,33 +102,19 @@
                 if (cTime > maxObj) { maxObj = cTime; latestTimeStr = dt; }
             }
             if(latestTimeStr) document.getElementById('xml-date').innerText = latestTimeStr.replace(' +0800','');
-
             document.getElementById('table-head').innerHTML = `<tr><th>測站</th><th>類型</th><th style="background:#444;">AQHI</th><th>二氧化氮<span class="sub-label">NO₂</span></th><th>臭氧<span class="sub-label">O₃</span></th><th>二氧化硫<span class="sub-label">SO₂</span></th><th>一氧化碳<span class="sub-label">CO</span></th><th>可吸入粒子<span class="sub-label">PM₁₀</span></th><th>細顆粒物<span class="sub-label">PM₂.₅</span></th></tr>`;
-            
             let tHTML = '', mHTML = '';
             for (let i = 0; i < itemsP.length; i++) {
                 if (itemsP[i].getElementsByTagName("DateTime")[0]?.textContent !== latestTimeStr) continue;
                 const name = itemsP[i].getElementsByTagName("StationName")[0]?.textContent.trim();
                 const type = ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般";
                 if (filter !== 'AQHI' && type !== filter) continue;
-                
                 const rawAQHI = (aqhiSource.find(desc => desc.includes(name)) || "-").match(/(\d+)/);
-                let lv = rawAQHI ? parseInt(rawAQHI[0]) : 1;
-                if (lv > 10) lv = 11;
-                
+                let lv = rawAQHI ? parseInt(rawAQHI[0]) : 1; if (lv > 10) lv = 11;
                 const g = (tag) => itemsP[i].getElementsByTagName(tag)[0]?.textContent || "-";
                 const d = [g("二氧化氮"), g("臭氧"), g("二氧化硫"), g("一氧化碳"), g("可吸入懸浮粒子"), g("細顆粒物")];
-
                 tHTML += `<tr><td><strong>${name}</strong></td><td>${type}</td><td><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></td><td>${d[0]}</td><td>${d[1]}</td><td>${d[2]}</td><td>${d[3]}</td><td>${d[4]}</td><td>${d[5]}</td></tr>`;
-                
-                mHTML += `<div class="station-card" style="border-left-color:${type==='路邊'?'#6f42c1':'#17a2b8'}">
-                    <div class="card-header"><span>${name} (${type})</span><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></div>
-                    <div class="card-grid">
-                        <div class="card-item"><span class="card-label">二氧化氮 NO₂ / 臭氧 O₃</span><span class="card-val">${d[0]} / ${d[1]}</span></div>
-                        <div class="card-item"><span class="card-label">二氧化硫 SO₂ / 一氧化碳 CO</span><span class="card-val">${d[2]} / ${d[3]}</span></div>
-                        <div class="card-item"><span class="card-label">可吸入粒子 PM₁₀</span><span class="card-val">${d[4]}</span></div>
-                        <div class="card-item"><span class="card-label">細顆粒物 PM₂.₅</span><span class="card-val">${d[5]}</span></div>
-                    </div></div>`;
+                mHTML += `<div class="station-card" style="border-left-color:${type==='路邊'?'#6f42c1':'#17a2b8'}"><div class="card-header"><span>${name} (${type})</span><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></div><div class="card-grid"><div class="card-item"><span class="card-label">二氧化氮 NO₂ / 臭氧 O₃</span><span class="card-val">${d[0]} / ${d[1]}</span></div><div class="card-item"><span class="card-label">二氧化硫 SO₂ / 一氧化碳 CO</span><span class="card-val">${d[2]} / ${d[3]}</span></div><div class="card-item"><span class="card-label">可吸入粒子 PM₁₀</span><span class="card-val">${d[4]}</span></div><div class="card-item"><span class="card-label">細顆粒物 PM₂.₅</span><span class="card-val">${d[5]}</span></div></div></div>`;
             }
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
         }
@@ -134,28 +122,15 @@
         function renderWeather(datas) {
             const tBody = document.getElementById('table-body');
             const mList = document.getElementById('mobile-list');
-            
             document.getElementById('table-head').innerHTML = `<tr><th class="weather-th">地區</th><th class="weather-th">氣溫</th><th class="weather-th">相對濕度</th><th class="weather-th">最高/最低</th><th class="weather-th">氣溫變幅</th><th class="weather-th">風速(風向)</th><th class="weather-th">陣風</th><th class="weather-th">氣壓</th><th class="weather-th">草地溫</th></tr>`;
-            
             let tHTML = '', mHTML = '';
             datas.forEach(row => {
-                const name = regionMap[row[0]] || row[0];
-                if (!row[1]) return;
-                
+                const name = regionMap[row[0]] || row[0]; if (!row[1]) return;
                 tHTML += `<tr><td><strong>${name}</strong></td><td class="temp-val">${row[1]}°C</td><td>${row[2]}%</td><td>${row[5]}°C / ${row[6]}°C</td><td>${row[7]}°C</td><td>${row[4]} km/h (${row[3]})</td><td>${row[8]?row[8]+' km/h':'-'}</td><td>${row[9]?row[9]+' hPa':'-'}</td><td>${row[10]?row[10]+'°C':'-'}</td></tr>`;
-                
-                mHTML += `<div class="station-card" style="border-left-color:var(--weather)">
-                    <div class="card-header"><span>${name}</span><span class="temp-val">${row[1]}°C</span></div>
-                    <div class="card-grid">
-                        <div class="card-item"><span class="card-label">最高 / 最低</span><span class="card-val">${row[5]}°C / ${row[6]}°C</span></div>
-                        <div class="card-item"><span class="card-label">相對濕度</span><span class="card-val">${row[2]}%</span></div>
-                        <div class="card-item"><span class="card-label">風速 (風向)</span><span class="card-val">${row[4]} km/h (${row[3]})</span></div>
-                        <div class="card-item"><span class="card-label">海平面氣壓</span><span class="card-val">${row[9]||'-'} hPa</span></div>
-                    </div></div>`;
+                mHTML += `<div class="station-card" style="border-left-color:var(--weather)"><div class="card-header"><span>${name}</span><span class="temp-val">${row[1]}°C</span></div><div class="card-grid"><div class="card-item"><span class="card-label">最高 / 最低</span><span class="card-val">${row[5]}°C / ${row[6]}°C</span></div><div class="card-item"><span class="card-label">相對濕度</span><span class="card-val">${row[2]}%</span></div><div class="card-item"><span class="card-label">風速 (風向)</span><span class="card-val">${row[4]} km/h (${row[3]})</span></div><div class="card-item"><span class="card-label">海平面氣壓</span><span class="card-val">${row[9]||'-'} hPa</span></div></div></div>`;
             });
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
         }
-        
         window.onload = loadData;
         window.onresize = adjustSticky;
     </script>
@@ -170,17 +145,10 @@
                 <option value="一般">污染物 - 只看「一般站」</option>
                 <option value="WEATHER">各區即時天氣 (JSON)</option>
             </select>
-            <div class="status-bar">
-                數據時間: <span id="xml-date">--</span> | 
-                <button onclick="loadData()" style="border:2px solid var(--p); border-radius:6px; padding:2px 12px; cursor:pointer; background:white; color:var(--p); font-weight:bold;">⚡ 終極更新</button> 
-                [<span id="manual-time">--</span>]
-            </div>
+            <div class="status-bar">數據時間: <span id="xml-date">--</span> | <button onclick="loadData()" style="border:2px solid var(--p); border-radius:6px; padding:2px 12px; cursor:pointer; background:white; color:var(--p); font-weight:bold;">⚡ 強制刷新數據</button> [<span id="manual-time">--</span>]</div>
         </div>
     </div>
-
-    <div class="desktop-view">
-        <table><thead id="table-head"></thead><tbody id="table-body"></tbody></table>
-    </div>
+    <div class="desktop-view"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div>
     <div id="mobile-list" class="mobile-view"></div>
 </body>
 </html>
