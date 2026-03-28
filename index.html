@@ -161,4 +161,18 @@
                 mList.innerHTML += `
                     <div class="station-card" style="border-left-color: ${d.type==='路邊'?'var(--roadside)':'var(--general)'}">
                         <div class="card-header">${d.name} ${typeTag}</div>
-                        <div class="grid
+                        <div class="grid">
+                            <div class="item"><span class="label">NO₂</span><span class="val">${fmt(d.no2,'no2')}</span></div>
+                            <div class="item"><span class="label">O₃</span><span class="val">${fmt(d.o3,'o3')}</span></div>
+                            <div class="item"><span class="label">SO₂</span><span class="val">${fmt(d.so2,'so2')}</span></div>
+                            <div class="item"><span class="label">PM₁₀</span><span class="val">${fmt(d.pm10,'pm10')}</span></div>
+                            <div class="item"><span class="label">PM₂.₅</span><span class="val">${fmt(d.pm25,'pm25')}</span></div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
