@@ -1,26 +1,31 @@
-name: Sync AQHI Data
+name: Sync Weather and Air Quality Data
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
-  workflow_dispatch:
+    - cron: '*/10 * * * *' # 每 10 分鐘自動執行一次
+  workflow_dispatch:      # 容許手動喺 GitHub Actions 頁面啟動
 
 jobs:
-  build:
+  update-data:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Download Pollutant Data
+      - name: Download Pollutant Index (XML)
         run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/24pc_ChT.xml" -o data.xml
 
-      - name: Download AQHI Index Data
+      - name: Download AQHI Index (XML)
         run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/aqhi_ind_rss_ChT.xml" -o aqhi_index.xml
 
-      - name: Commit and push if changed
+      - name: Download Regional Weather (JSON)
+        run: curl -sL "https://www.hko.gov.hk/wxinfo/json/region.json" -o region.json
+
+      - name: Commit and Push changes
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add data.xml aqhi_index.xml
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update AQHI and 24hr Pollutant data" && git push)
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.xml aqhi_index.xml region.json
+          # 如果數據冇變動，就唔會 commit，避免報錯
+          git commit -m "Auto sync: Update Weather and Air Quality data" || exit 0
+          git push
