@@ -2,7 +2,7 @@ name: Sync AQHI Data
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # 每 30 分鐘更新一次
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Download Pollutant Data
-        run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/aqhi_xml_ChT.xml" -o data.xml
+        run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/24pc_ChT.xml" -o data.xml
 
       - name: Download AQHI Index Data
         run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/aqhi_ind_rss_ChT.xml" -o aqhi_index.xml
@@ -23,4 +23,4 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add data.xml aqhi_index.xml
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update AQHI and Pollutant data" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update AQHI and 24hr Pollutant data" && git push)
