@@ -17,42 +17,49 @@
         .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; }
         .tag-general { background: var(--general); }
         .tag-roadside { background: var(--roadside); }
+        
+        /* 表格樣式 */
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        table { width: 100%; border-collapse: collapse; min-width: 800px; }
         th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
-        th { background: var(--p); color: white; }
+        th { background: var(--p); color: white; font-size: 0.85rem; }
+        .sub-label { display: block; font-size: 0.7rem; font-weight: normal; opacity: 0.9; }
+
+        /* 卡片樣式 */
         .mobile-view { display: none; margin-top: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 5px solid #ccc; }
-        .card-header { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .item { text-align: center; padding: 6px 0; background: #fafafa; border-radius: 8px; }
-        .label { font-size: 0.65rem; color: #888; display: block; }
-        .val { font-size: 0.9rem; font-weight: bold; }
+        .card-header { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .item { text-align: center; padding: 8px 0; background: #fafafa; border-radius: 8px; }
+        .label { font-size: 0.7rem; color: #666; display: block; margin-bottom: 2px; }
+        .val { font-size: 1rem; font-weight: bold; }
         .exceed { color: var(--red); }
         @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
     </style>
 
     <script>
         let latestData = {}; 
+        let stationOrder = []; // 用嚟記住 XML 原本嘅地區次序
         const TH = { no2: 200, o3: 160, so2: 50, pm10: 100, pm25: 50 };
 
         async function loadData() {
             const debug = document.getElementById('debug-info');
             const xmlDateSpan = document.getElementById('xml-date');
             const manualTimeSpan = document.getElementById('manual-time');
-            debug.innerText = "同步中...";
+            debug.innerText = "同步數據中...";
             debug.style.display = "block";
 
             try {
                 const res = await fetch('data.xml?v=' + Date.now());
-                if (!res.ok) throw new Error("搵唔到數據檔案");
+                if (!res.ok) throw new Error("404: 搵唔到數據檔案");
                 
                 const txt = await res.text();
                 const xml = new DOMParser().parseFromString(txt, "text/xml");
                 const items = xml.getElementsByTagName("PollutantConcentration");
                 
                 const tempMap = {}; 
-                let maxDateObj = new Date(0); // 用嚟搵 XML 入面最新嘅日期時間
+                stationOrder = []; // 清空次序清單
+                let maxDateObj = new Date(0);
                 let maxDateStr = "-- --- ---- --:--";
 
                 for (let i = 0; i < items.length; i++) {
@@ -60,12 +67,16 @@
                     const dateTimeStr = items[i].getElementsByTagName("DateTime")[0].textContent;
                     const currentTime = new Date(dateTimeStr.replace(' +0800', ''));
 
-                    // 搵出成份 XML 最新嗰個時間點
+                    // 更新 XML 最新時間點
                     if (currentTime > maxDateObj) {
                         maxDateObj = currentTime;
-                        // 轉換格式為 "29 Mar 2026 01:00"
                         const parts = dateTimeStr.split(' ');
                         maxDateStr = `${parts[0]} ${parts[1]} ${parts[2]} ${parts[4].substring(0,5)}`;
+                    }
+
+                    // 紀錄地區出現次序（如果未見過呢個名）
+                    if (!stationOrder.includes(name)) {
+                        stationOrder.push(name);
                     }
 
                     if (!tempMap[name] || currentTime > tempMap[name].rawTime) {
@@ -84,21 +95,16 @@
 
                 latestData = tempMap;
 
-                // 更新選單
+                // 更新選單 (跟 stationOrder 次序)
                 const selector = document.getElementById('station-selector');
                 while (selector.options.length > 3) selector.remove(3);
-                Object.keys(latestData).sort().forEach(name => {
+                stationOrder.forEach(name => {
                     selector.add(new Option(name, name));
                 });
 
                 render('ALL');
-                
-                // 顯示 XML 上的最新時間
                 xmlDateSpan.innerText = maxDateStr;
-                // 顯示手動更新時間 (24小時制 + 秒)
-                const now = new Date();
-                manualTimeSpan.innerText = now.toTimeString().split(' ')[0];
-                
+                manualTimeSpan.innerText = new Date().toTimeString().split(' ')[0];
                 debug.style.display = "none";
             } catch (e) {
                 debug.innerText = "❌ " + e.message;
@@ -111,7 +117,14 @@
             let tHTML = '', mHTML = '';
             const fmt = (v, k) => (v !== "-" && parseFloat(v) > TH[k]) ? `<span class="exceed">${v}</span>` : v;
 
-            Object.values(latestData).filter(d => (filter==='ALL' || d.type===filter || d.name===filter)).forEach(d => {
+            // 根據 stationOrder 次序嚟渲染資料
+            stationOrder.forEach(name => {
+                const d = latestData[name];
+                if (!d) return;
+
+                // 篩選邏輯
+                if (filter !== 'ALL' && d.type !== filter && d.name !== filter) return;
+
                 const isRoad = d.type === "路邊";
                 const tag = `<span class="tag ${isRoad?'tag-roadside':'tag-general'}">${d.type}</span>`;
                 
@@ -126,11 +139,11 @@
                     <div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}">
                         <div class="card-header">${d.name} ${tag}</div>
                         <div class="grid">
-                            <div class="item"><span class="label">NO₂</span><span class="val">${fmt(d.no2,'no2')}</span></div>
-                            <div class="item"><span class="label">O₃</span><span class="val">${fmt(d.o3,'o3')}</span></div>
-                            <div class="item"><span class="label">SO₂</span><span class="val">${fmt(d.so2,'so2')}</span></div>
-                            <div class="item"><span class="label">PM₁₀</span><span class="val">${fmt(d.pm10,'pm10')}</span></div>
-                            <div class="item"><span class="label">PM₂.₅</span><span class="val">${fmt(d.pm25,'pm25')}</span></div>
+                            <div class="item"><span class="label">二氧化氮 (NO₂)</span><span class="val">${fmt(d.no2,'no2')}</span></div>
+                            <div class="item"><span class="label">臭氧 (O₃)</span><span class="val">${fmt(d.o3,'o3')}</span></div>
+                            <div class="item"><span class="label">二氧化硫 (SO₂)</span><span class="val">${fmt(d.so2,'so2')}</span></div>
+                            <div class="item"><span class="label">可吸入粒子 (PM₁₀)</span><span class="val">${fmt(d.pm10,'pm10')}</span></div>
+                            <div class="item" style="grid-column: span 2;"><span class="label">細顆粒物 (PM₂.₅)</span><span class="val">${fmt(d.pm25,'pm25')}</span></div>
                         </div>
                     </div>`;
             });
@@ -143,7 +156,7 @@
     <div class="header-section">
         <h1>香港空氣監測</h1>
         <select id="station-selector" onchange="render(this.value)">
-            <option value="ALL">--- 顯示所有地區 ---</option>
+            <option value="ALL">--- 顯示所有地區 (按XML次序) ---</option>
             <option value="路邊">只看「路邊監測站」</option>
             <option value="一般">只看「一般監測站」</option>
         </select>
@@ -154,9 +167,19 @@
             <div id="debug-info"></div>
         </div>
     </div>
+
     <div class="desktop-view">
         <table>
-            <thead><tr><th>測站</th><th>類型</th><th>NO₂</th><th>O₃</th><th>SO₂</th><th>PM₁₀</th><th>PM₂.₅</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>測站</th><th>類型</th>
+                    <th>二氧化氮<span class="sub-label">(NO₂)</span></th>
+                    <th>臭氧<span class="sub-label">(O₃)</span></th>
+                    <th>二氧化硫<span class="sub-label">(SO₂)</span></th>
+                    <th>可吸入粒子<span class="sub-label">(PM₁₀)</span></th>
+                    <th>細顆粒物<span class="sub-label">(PM₂.₅)</span></th>
+                </tr>
+            </thead>
             <tbody id="table-body"></tbody>
         </table>
     </div>
