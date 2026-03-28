@@ -95,4 +95,62 @@
             const tBody = document.getElementById('table-body');
             const mList = document.getElementById('mobile-list');
             let tHTML = '', mHTML = '';
-            const fmt = (v, k) => (v !== "-" && parseFloat(v) >
+            const fmt = (v, k) => (v !== "-" && parseFloat(v) > TH[k]) ? `<span class="exceed">${v}</span>` : v;
+
+            const dataArray = Object.values(latestData);
+
+            dataArray.filter(d => (filter==='ALL' || d.type===filter || d.name===filter)).forEach(d => {
+                const isRoad = d.type === "路邊";
+                const tag = `<span class="tag ${isRoad?'tag-roadside':'tag-general'}">${d.type}</span>`;
+                
+                tHTML += `<tr>
+                    <td><strong>${d.name}</strong><span class="time-label">(${d.displayTime})</span></td>
+                    <td>${tag}</td>
+                    <td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td>
+                    <td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td>
+                </tr>`;
+                
+                mHTML += `
+                    <div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}">
+                        <div class="card-header">
+                            <span>${d.name} ${tag}</span>
+                            <span class="time-label">${d.displayTime}</span>
+                        </div>
+                        <div class="grid">
+                            <div class="item"><span class="label">NO₂</span><span class="val">${fmt(d.no2,'no2')}</span></div>
+                            <div class="item"><span class="label">O₃</span><span class="val">${fmt(d.o3,'o3')}</span></div>
+                            <div class="item"><span class="label">SO₂</span><span class="val">${fmt(d.so2,'so2')}</span></div>
+                            <div class="item"><span class="label">PM₁₀</span><span class="val">${fmt(d.pm10,'pm10')}</span></div>
+                            <div class="item"><span class="label">PM₂.₅</span><span class="val">${fmt(d.pm25,'pm25')}</span></div>
+                        </div>
+                    </div>`;
+            });
+            
+            tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
+        }
+        window.onload = loadData;
+    </script>
+</head>
+<body>
+    <div class="header-section">
+        <h1>香港空氣監測 (即時數據版)</h1>
+        <select id="station-selector" onchange="render(this.value)">
+            <option value="ALL">--- 顯示所有地區 ---</option>
+            <option value="路邊">只看「路邊監測站」</option>
+            <option value="一般">只看「一般監測站」</option>
+        </select>
+        <div class="status-bar">
+            系統時間: <span id="update-time">--:--</span> | 
+            <button onclick="loadData()" style="border:none;background:none;color:var(--p);font-weight:bold;cursor:pointer;">🔄 更新</button>
+            <div id="debug-info"></div>
+        </div>
+    </div>
+    <div class="desktop-view">
+        <table>
+            <thead><tr><th>測站</th><th>類型</th><th>NO₂</th><th>O₃</th><th>SO₂</th><th>PM₁₀</th><th>PM₂.₅</th></tr></thead>
+            <tbody id="table-body"></tbody>
+        </table>
+    </div>
+    <div id="mobile-list" class="mobile-view"></div>
+</body>
+</html>
