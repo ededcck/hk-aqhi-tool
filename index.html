@@ -17,7 +17,7 @@
         .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; }
         .tag-general { background: var(--general); }
         .tag-roadside { background: var(--roadside); }
-        .aqhi-val { font-weight: 900; font-size: 1.2rem; color: #000; }
+        .aqhi-val { font-weight: 900; font-size: 1.3rem; color: #000; }
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
@@ -45,33 +45,39 @@
             debug.style.display = "block";
 
             try {
+                // 讀取本地 GitHub 檔案
                 const [resP, resA] = await Promise.all([
                     fetch('data.xml?v=' + Date.now()),
                     fetch('aqhi_index.xml?v=' + Date.now())
                 ]);
 
-                if (!resP.ok || !resA.ok) throw new Error("數據檔案未就緒，請手動 Run Workflow");
+                if (!resP.ok || !resA.ok) throw new Error("XML 檔案讀取失敗，請確認 GitHub Actions 已執行");
 
                 const xmlP = new DOMParser().parseFromString(await resP.text(), "text/xml");
                 const xmlA = new DOMParser().parseFromString(await resA.text(), "text/xml");
 
-                // 解析 AQHI
+                // 1. 解析 AQHI (處理 RSS 格式嘅 description)
                 const aqhiMap = {};
                 const itemsA = xmlA.getElementsByTagName("item");
                 for (let i = 0; i < itemsA.length; i++) {
-                    const desc = itemsA[i].getElementsByTagName("description")[0].textContent;
-                    const match = desc.match(/(.+) : (\d+)/);
-                    if (match) aqhiMap[match[1].trim()] = match[2];
+                    const desc = itemsA[i].getElementsByTagName("description")[0]?.textContent || "";
+                    // 格式通常係 "中西區 : 3"
+                    if (desc.includes(" : ")) {
+                        const parts = desc.split(" : ");
+                        const zoneName = parts[0].trim();
+                        const indexVal = parts[1].trim();
+                        aqhiMap[zoneName] = indexVal;
+                    }
                 }
 
-                // 解析污染物 (24pc_ChT.xml 格式)
+                // 2. 解析污染物
                 const itemsP = xmlP.getElementsByTagName("PollutantConcentration");
                 const tempMap = {}; 
                 stationOrder = [];
                 let maxDateObj = new Date(0), maxDateStr = "-- --- ---- --:--";
 
                 for (let i = 0; i < itemsP.length; i++) {
-                    const name = itemsP[i].getElementsByTagName("StationName")[0].textContent;
+                    const name = itemsP[i].getElementsByTagName("StationName")[0].textContent.trim();
                     const dtStr = itemsP[i].getElementsByTagName("DateTime")[0].textContent;
                     const cTime = new Date(dtStr.replace(' +0800', ''));
 
@@ -83,11 +89,10 @@
 
                     if (!stationOrder.includes(name)) stationOrder.push(name);
 
-                    // 只保留最新一筆
                     if (!tempMap[name] || cTime > tempMap[name].rawTime) {
                         tempMap[name] = {
                             name, 
-                            aqhi: aqhiMap[name] || "-", 
+                            aqhi: aqhiMap[name] || "-", // 這裡進行配對
                             rawTime: cTime,
                             type: ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般",
                             no2: itemsP[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
@@ -109,7 +114,7 @@
                 document.getElementById('manual-time').innerText = new Date().toTimeString().split(' ')[0];
                 debug.style.display = "none";
             } catch (e) {
-                debug.innerText = "❌ " + e.message;
+                debug.innerText = "❌ 錯誤: " + e.message;
             }
         }
 
@@ -141,7 +146,7 @@
             <option value="一般">只看「一般監測站」</option>
         </select>
         <div class="status-bar">
-            系統時間: <span id="xml-date">-- --- ---- --:--</span> | 
+            數據時間: <span id="xml-date">-- --- ---- --:--</span> | 
             <button onclick="loadData()" style="border:none;background:none;color:var(--p);font-weight:bold;cursor:pointer;">🔄 更新</button>
             [<span id="manual-time">--:--:--</span>]
             <div id="debug-info"></div>
