@@ -19,7 +19,6 @@
         .aqhi-container { display: flex; align-items: center; justify-content: center; min-height: 35px; }
         .aqhi-level-icon { height: 1.8rem; width: auto; vertical-align: middle; }
         
-        /* 表格優化：污染物較多，字體略縮 */
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; min-width: 1000px; }
         th, td { padding: 10px 5px; text-align: center; border-bottom: 1px solid #eee; font-size: 0.9rem; }
@@ -32,7 +31,6 @@
         .card-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .station-name-mobile { font-size: 1.2rem; font-weight: 800; color: #000; }
         
-        /* 手機版 6 格排版 */
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
         .item { text-align: center; padding: 6px 0; background: #fafafa; border-radius: 8px; border: 1px solid #f0f0f0; }
         .label { font-size: 0.6rem; color: #666; display: block; margin-bottom: 2px; white-space: nowrap; }
@@ -45,8 +43,7 @@
         let latestData = {}; 
         let stationOrder = []; 
         let currentFilter = 'ALL';
-        // 污染物警戒線設定
-        const TH = { no2: 200, o3: 160, so2: 50, pm10: 100, pm25: 50, co: 1000 };
+        const TH = { no2: 200, o3: 160, so2: 50, co: 1000, pm10: 100, pm25: 50 };
 
         function formatAQHI(rawStr) {
             if (!rawStr || rawStr === "-") return "-";
@@ -74,7 +71,6 @@
                 ]);
                 const xmlP = new DOMParser().parseFromString(await resP.text(), "text/xml");
                 const xmlA = new DOMParser().parseFromString(await resA.text(), "text/xml");
-                
                 const aqhiSource = [];
                 const itemsA = xmlA.getElementsByTagName("item");
                 for (let i = 0; i < itemsA.length; i++) {
@@ -111,9 +107,9 @@
                             no2:  itemsP[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
                             o3:   itemsP[i].getElementsByTagName("臭氧")[0]?.textContent || "-",
                             so2:  itemsP[i].getElementsByTagName("二氧化硫")[0]?.textContent || "-",
+                            co:   itemsP[i].getElementsByTagName("一氧化碳")[0]?.textContent || "-",
                             pm10: itemsP[i].getElementsByTagName("可吸入懸浮粒子")[0]?.textContent || "-",
-                            pm25: itemsP[i].getElementsByTagName("細顆粒物")[0]?.textContent || "-",
-                            co:   itemsP[i].getElementsByTagName("一氧化碳")[0]?.textContent || "-" // 新增 CO
+                            pm25: itemsP[i].getElementsByTagName("細顆粒物")[0]?.textContent || "-"
                         };
                     }
                 }
@@ -144,7 +140,7 @@
                 
                 const isRoad = d.type === "路邊", tag = `<span class="tag ${isRoad?'tag-roadside':'tag-general'}">${d.type}</span>`;
                 
-                // 電腦版表格 (新增一氧化碳列)
+                // 電腦版表格 (CO 移至 SO2 後)
                 tHTML += `<tr>
                     <td><strong>${d.name}</strong></td>
                     <td>${tag}</td>
@@ -152,12 +148,12 @@
                     <td>${fmt(d.no2,'no2')}</td>
                     <td>${fmt(d.o3,'o3')}</td>
                     <td>${fmt(d.so2,'so2')}</td>
+                    <td>${fmt(d.co,'co')}</td>
                     <td>${fmt(d.pm10,'pm10')}</td>
                     <td>${fmt(d.pm25,'pm25')}</td>
-                    <td>${fmt(d.co,'co')}</td>
                 </tr>`;
 
-                // 手機版卡片 (6 格對稱排版)
+                // 手機版卡片 (CO 移至 SO2 後)
                 mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}">
                     <div class="card-header"><div class="station-name-mobile">${d.name} ${tag}</div><div>${d.aqhiHtml}</div></div>
                     <div class="grid">
@@ -200,9 +196,9 @@
                     <th>二氧化氮<span class="sub-label">(NO₂)</span></th>
                     <th>臭氧<span class="sub-label">(O₃)</span></th>
                     <th>二氧化硫<span class="sub-label">(SO₂)</span></th>
+                    <th>一氧化碳<span class="sub-label">(CO)</span></th>
                     <th>可吸入粒子<span class="sub-label">(PM₁₀)</span></th>
                     <th>細顆粒物<span class="sub-label">(PM₂.₅)</span></th>
-                    <th>一氧化碳<span class="sub-label">(CO)</span></th>
                 </tr>
             </thead>
             <tbody id="table-body"></tbody>
