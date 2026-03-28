@@ -8,42 +8,49 @@
         :root { --p: #0056b3; --bg: #f0f2f5; --red: #d9534f; --white: #ffffff; --general: #17a2b8; --roadside: #6f42c1; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 10px; color: #333; }
         
-        /* 頂部 Header 改動 */
-        .header-section { position: sticky; top: 0; background: var(--bg); z-index: 100; padding: 15px 10px; border-bottom: 2px solid #ddd; text-align: center; }
+        /* Header 部分 */
+        .header-section { position: sticky; top: 0; background: var(--bg); z-index: 100; padding: 12px 10px; border-bottom: 2px solid #ddd; text-align: center; }
         .logo-link { display: inline-block; text-decoration: none; transition: opacity 0.2s; }
         .logo-link:hover { opacity: 0.8; }
-        .main-logo { height: 45px; width: auto; max-width: 90%; margin-bottom: 5px; }
+        .main-logo { height: 40px; width: auto; max-width: 90%; margin-bottom: 5px; }
         
-        select { padding: 12px; border: 2px solid var(--p); border-radius: 10px; font-size: 1rem; width: 100%; max-width: 400px; margin: 10px auto; display: block; }
-        .status-bar { font-size: 0.85rem; color: #555; margin-top: 5px; line-height: 1.6; }
+        select { padding: 12px; border: 2px solid var(--p); border-radius: 10px; font-size: 1rem; width: 100%; max-width: 400px; margin: 8px auto; display: block; }
+        .status-bar { font-size: 0.8rem; color: #555; line-height: 1.6; }
         
-        .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; }
+        .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; font-weight: normal; }
         .tag-general { background: var(--general); }
         .tag-roadside { background: var(--roadside); }
         
-        /* AQHI Level Icon 樣式 */
-        .aqhi-container { display: flex; align-items: center; justify-content: center; min-height: 45px; }
-        .aqhi-level-icon { height: 2.4rem; width: auto; vertical-align: middle; }
+        /* AQHI Icon 大細優化 */
+        .aqhi-container { display: flex; align-items: center; justify-content: center; min-height: 35px; }
+        .aqhi-level-icon { height: 1.8rem; width: auto; vertical-align: middle; }
 
+        /* 電腦版表格 */
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
-        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
+        th, td { padding: 10px; text-align: center; border-bottom: 1px solid #eee; }
         th { background: var(--p); color: white; font-size: 0.8rem; }
         .sub-label { display: block; font-size: 0.7rem; font-weight: normal; opacity: 0.9; }
         .exceed { color: var(--red); font-weight: bold; }
 
+        /* 手機版卡片 */
         .mobile-view { display: none; margin-top: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 8px solid #ccc; }
-        .card-header { font-size: 1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* 手機版地區名放大 */
+        .card-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .station-name-mobile { font-size: 1.2rem; font-weight: 800; color: #000; display: flex; align-items: center; }
+        
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .item { text-align: center; padding: 8px 0; background: #fafafa; border-radius: 8px; }
-        .label { font-size: 0.7rem; color: #666; display: block; }
-        .val { font-size: 1rem; font-weight: bold; }
+        .label { font-size: 0.65rem; color: #666; display: block; margin-bottom: 2px; } /* 微調標籤字體 */
+        .val { font-size: 1.1rem; font-weight: bold; }
         
         @media (max-width: 768px) { 
             .desktop-view { display: none; } 
             .mobile-view { display: block; } 
-            .main-logo { height: 35px; } /* 手機版 Logo 縮細少少廢事佔位 */
+            .main-logo { height: 32px; }
+            .aqhi-level-icon { height: 1.65rem; }
         }
     </style>
 
@@ -130,8 +137,22 @@
                 const d = latestData[name];
                 if (!d || (filter !== 'ALL' && d.type !== filter && d.name !== filter)) return;
                 const isRoad = d.type === "路邊", tag = `<span class="tag ${isRoad?'tag-roadside':'tag-general'}">${d.type}</span>`;
+                
                 tHTML += `<tr><td><strong>${d.name}</strong></td><td>${tag}</td><td>${d.aqhiHtml}</td><td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td><td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td></tr>`;
-                mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}"><div class="card-header"><span>${d.name} ${tag}</span><div>${d.aqhiHtml}</div></div><div class="grid"><div class="item"><span class="label">二氧化氮 (NO₂)</span><span class="val">${fmt(d.no2,'no2')}</span></div><div class="item"><span class="label">臭氧 (O₃)</span><span class="val">${fmt(d.o3,'o3')}</span></div><div class="item"><span class="label">二氧化硫 (SO₂)</span><span class="val">${fmt(d.so2,'so2')}</span></div><div class="item"><span class="label">可吸入粒子 (PM₁₀)</span><span class="val">${fmt(d.pm10,'pm10')}</span></div><div class="item" style="grid-column: span 2;"><span class="label">細顆粒物 (PM₂.₅)</span><span class="val">${fmt(d.pm25,'pm25')}</span></div></div></div>`;
+                
+                mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}">
+                    <div class="card-header">
+                        <div class="station-name-mobile">${d.name} ${tag}</div>
+                        <div>${d.aqhiHtml}</div>
+                    </div>
+                    <div class="grid">
+                        <div class="item"><span class="label">二氧化氮 NO₂</span><span class="val">${fmt(d.no2,'no2')}</span></div>
+                        <div class="item"><span class="label">臭氧 O₃</span><span class="val">${fmt(d.o3,'o3')}</span></div>
+                        <div class="item"><span class="label">二氧化硫 SO₂</span><span class="val">${fmt(d.so2,'so2')}</span></div>
+                        <div class="item"><span class="label">可吸入粒子 PM₁₀</span><span class="val">${fmt(d.pm10,'pm10')}</span></div>
+                        <div class="item" style="grid-column: span 2;"><span class="label">細顆粒物 PM₂.₅</span><span class="val">${fmt(d.pm25,'pm25')}</span></div>
+                    </div>
+                </div>`;
             });
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
         }
@@ -143,7 +164,6 @@
         <a href="https://www.aqhi.gov.hk/tc/index.html" target="_blank" class="logo-link">
             <img src="https://www.aqhi.gov.hk/common/images/logo_aqhi.svg" alt="AQHI Logo" class="main-logo">
         </a>
-        
         <select id="station-selector" onchange="render(this.value)">
             <option value="ALL">--- 顯示所有地區 ---</option>
             <option value="路邊">只看「路邊監測站」</option>
@@ -162,7 +182,7 @@
                 <tr>
                     <th>測站</th>
                     <th>類型</th>
-                    <th style="background:#444; width: 140px;">AQHI</th>
+                    <th style="background:#444; width: 100px;">AQHI</th>
                     <th>二氧化氮<span class="sub-label">(NO₂)</span></th>
                     <th>臭氧<span class="sub-label">(O₃)</span></th>
                     <th>二氧化硫<span class="sub-label">(SO₂)</span></th>
