@@ -7,22 +7,39 @@
     <style>
         :root { --p: #0056b3; --bg: #f0f2f5; --red: #d9534f; --white: #ffffff; --general: #17a2b8; --roadside: #6f42c1; --weather: #28a745; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 10px; color: #333; }
-        .header-section { position: sticky; top: 0; background: var(--bg); z-index: 1000; padding: 12px 10px; border-bottom: 2px solid #ddd; text-align: center; }
+        
+        /* 頂部選擇欄固定 */
+        .header-section { position: sticky; top: 0; background: var(--bg); z-index: 2000; padding: 12px 10px; border-bottom: 2px solid #ddd; text-align: center; }
         .main-logo { height: 40px; margin-bottom: 5px; }
         select { padding: 12px; border: 2px solid var(--p); border-radius: 10px; font-size: 1rem; width: 100%; max-width: 400px; margin: 8px auto; display: block; background: white; outline: none; }
         .status-bar { font-size: 0.8rem; color: #555; line-height: 1.6; }
-        .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; font-weight: normal; }
-        .tag-general { background: var(--general); }
-        .tag-roadside { background: var(--roadside); }
-        .aqhi-container { display: flex; align-items: center; justify-content: center; min-height: 35px; }
-        .aqhi-level-icon { height: 1.8rem; }
+        
+        /* 表格容器 */
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; min-width: 1100px; }
-        th, td { padding: 12px 5px; text-align: center; border-bottom: 1px solid #eee; font-size: 0.9rem; }
-        th { background: var(--p); color: white; font-size: 0.75rem; white-space: nowrap; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1100px; }
+        
+        /* 重要：固定網頁版標題行 (Sticky Header) */
+        thead th { 
+            position: sticky; 
+            top: 135px; /* 根據上方 header-section 的高度調整，確保唔會被遮住 */
+            z-index: 1500;
+            background: var(--p); 
+            color: white; 
+            font-size: 0.75rem; 
+            white-space: nowrap;
+            padding: 12px 5px;
+            border-bottom: 2px solid rgba(0,0,0,0.1);
+        }
+        
+        /* 天氣版標題背景色 */
+        .weather-th { background: var(--weather) !important; }
+
+        td { padding: 12px 5px; text-align: center; border-bottom: 1px solid #eee; font-size: 0.9rem; }
         .sub-label { display: block; font-size: 0.65rem; font-weight: normal; opacity: 0.9; }
         .exceed { color: var(--red); font-weight: bold; }
         .temp-val { color: var(--red); font-weight: bold; font-size: 1.1rem; }
+
+        /* 手機版樣式 */
         .mobile-view { display: none; margin-top: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 8px solid #ccc; }
         .card-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
@@ -30,26 +47,33 @@
         .item { text-align: center; padding: 8px 4px; background: #fafafa; border-radius: 8px; border: 1px solid #f0f0f0; }
         .label { font-size: 0.65rem; color: #666; display: block; margin-bottom: 4px; }
         .val { font-size: 1rem; font-weight: bold; }
-        @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
+        .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; font-weight: normal; }
+        .tag-general { background: var(--general); }
+        .tag-roadside { background: var(--roadside); }
+        .aqhi-level-icon { height: 1.8rem; }
+
+        @media (max-width: 768px) { 
+            .desktop-view { display: none; } 
+            .mobile-view { display: block; } 
+            thead th { top: 0; } /* 手機版如果顯示表格則貼頂 */
+        }
     </style>
 
     <script>
         const TH = { no2: 200, o3: 160, so2: 50, co: 1000, pm10: 100, pm25: 50 };
         const regionMap = {"hka":"赤鱲角","cch":"長洲","hpv":"跑馬地","hko":"天文台","hkp":"香港公園","se1":"啟德跑道公園","ksc":"滘西洲","kp":"京士柏","klt":"九龍城","ktg":"觀塘","lfs":"流浮山","ngp":"昂坪","tyw":"北潭涌","pen":"坪洲","skg":"西貢","sha":"沙田","ssp":"深水埗","skw":"筲箕灣","sek":"石崗","ssh":"上水","sty":"赤柱","tkl":"打鼓嶺","plc":"大美督","tpo":"大埔","vp1":"山頂","jkb":"將軍澳","ty1":"青衣","twn":"可觀","tw":"門谷","tun":"屯門","wgl":"橫瀾島","wlp":"濕地","hks":"黃竹坑","wts":"黃大仙","ylp":"元朗公園","cwb":"清水灣","tms":"大帽山","tc":"東涌","tls":"大老山"};
 
-        function formatAQHI(rawStr) {
-            if (!rawStr || rawStr === "-") return "-";
-            const numMatch = rawStr.match(/(\d+)/);
-            let lv = numMatch ? parseInt(numMatch[0]) : 1;
-            if (rawStr.includes("+") || rawStr.includes("嚴重") || lv > 10) lv = 11;
-            return `<div class="aqhi-container"><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></div>`;
-        }
-
         async function loadData() {
             const mode = document.getElementById('station-selector').value;
             const timeLabel = document.getElementById('xml-date');
+            const tBody = document.getElementById('table-body');
+            const mList = document.getElementById('mobile-list');
+
+            if(tBody) tBody.innerHTML = "<tr><td colspan='9'>正在更新數據...</td></tr>";
+            timeLabel.innerText = "連線中...";
+
             const bust = "?v=" + Date.now();
-            const fetchOpt = { cache: "no-cache", headers: { 'Cache-Control': 'no-cache' } };
+            const fetchOpt = { cache: "reload", headers: { 'Cache-Control': 'no-cache' } };
 
             try {
                 if (mode === 'WEATHER') {
@@ -67,7 +91,10 @@
                     renderAQHI(mode, xmlP, xmlA);
                 }
                 document.getElementById('manual-time').innerText = new Date().toTimeString().split(' ')[0];
-            } catch (e) { console.error(e); timeLabel.innerText = "更新失敗"; }
+            } catch (e) { 
+                timeLabel.innerText = "更新失敗";
+                console.error(e);
+            }
         }
 
         function renderAQHI(filter, xmlP, xmlA) {
@@ -77,49 +104,39 @@
             const itemsP = xmlP.getElementsByTagName("PollutantConcentration");
             const aqhiSource = Array.from(xmlA.getElementsByTagName("item")).map(i => i.getElementsByTagName("description")[0]?.textContent || "");
 
-            // 1. 搵出最新的時間
             let latestTimeStr = "";
             let maxObj = new Date(0);
             for (let i = 0; i < itemsP.length; i++) {
                 const dt = itemsP[i].getElementsByTagName("DateTime")[0]?.textContent || "";
                 const cTime = new Date(dt.replace(' +0800', ''));
-                if (cTime > maxObj) {
-                    maxObj = cTime;
-                    latestTimeStr = dt;
-                }
+                if (cTime > maxObj) { maxObj = cTime; latestTimeStr = dt; }
             }
-            const p = latestTimeStr.split(' ');
-            document.getElementById('xml-date').innerText = `${p[0]} ${p[1]} ${p[2]} ${p[4]?.substring(0,5)}`;
+            if(latestTimeStr) {
+                const p = latestTimeStr.split(' ');
+                document.getElementById('xml-date').innerText = `${p[0]} ${p[1]} ${p[2]} ${p[4]?.substring(0,5)}`;
+            }
 
-            // 2. 淨係顯示對應最新時間嘅數據
             tHead.innerHTML = `<tr><th>測站</th><th>類型</th><th style="background:#444;">AQHI</th><th>二氧化氮<span class="sub-label">(NO₂)</span></th><th>臭氧<span class="sub-label">(O₃)</span></th><th>二氧化硫<span class="sub-label">(SO₂)</span></th><th>一氧化碳<span class="sub-label">(CO)</span></th><th>可吸入粒子<span class="sub-label">(PM₁₀)</span></th><th>細顆粒物<span class="sub-label">(PM₂.₅)</span></th></tr>`;
+            
             let tHTML = '', mHTML = '';
             const fmt = (v, k) => (v !== "-" && parseFloat(v) > TH[k]) ? `<span class="exceed">${v}</span>` : v;
 
             for (let i = 0; i < itemsP.length; i++) {
-                const itemTime = itemsP[i].getElementsByTagName("DateTime")[0]?.textContent;
-                if (itemTime !== latestTimeStr) continue; // 唔係最新時間就 Skip
-
+                if (itemsP[i].getElementsByTagName("DateTime")[0]?.textContent !== latestTimeStr) continue;
                 const name = itemsP[i].getElementsByTagName("StationName")[0]?.textContent.trim();
                 const type = ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般";
                 if (filter !== 'AQHI' && type !== filter) continue;
 
                 const rawAQHI = aqhiSource.find(desc => desc.includes(name)) || "-";
+                const numMatch = rawAQHI.match(/(\d+)/);
+                let lv = numMatch ? parseInt(numMatch[0]) : 1;
+                if (rawAQHI.includes("+") || rawAQHI.includes("嚴重") || lv > 10) lv = 11;
+
                 const getVal = (tag) => itemsP[i].getElementsByTagName(tag)[0]?.textContent || "-";
                 const d = { no2: getVal("二氧化氮"), o3: getVal("臭氧"), so2: getVal("二氧化硫"), co: getVal("一氧化碳"), pm10: getVal("可吸入懸浮粒子"), pm25: getVal("細顆粒物") };
 
-                tHTML += `<tr><td><strong>${name}</strong></td><td><span class="tag ${type==='路邊'?'tag-roadside':'tag-general'}">${type}</span></td><td>${formatAQHI(rawAQHI)}</td><td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td><td>${fmt(d.co,'co')}</td><td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td></tr>`;
-                
-                mHTML += `<div class="station-card" style="border-left-color:${type==='路邊'?'#6f42c1':'#17a2b8'}">
-                    <div class="card-header"><div class="station-name-mobile">${name} <span class="tag ${type==='路邊'?'tag-roadside':'tag-general'}">${type}</span></div><div>${formatAQHI(rawAQHI)}</div></div>
-                    <div class="grid">
-                        <div class="item"><span class="label">二氧化氮 NO₂</span><span class="val">${fmt(d.no2,'no2')}</span></div>
-                        <div class="item"><span class="label">臭氧 O₃</span><span class="val">${fmt(d.o3,'o3')}</span></div>
-                        <div class="item"><span class="label">二氧化硫 SO₂</span><span class="val">${fmt(d.so2,'so2')}</span></div>
-                        <div class="item"><span class="label">一氧化碳 CO</span><span class="val">${fmt(d.co,'co')}</span></div>
-                        <div class="item"><span class="label">可吸入粒子 PM₁₀</span><span class="val">${fmt(d.pm10,'pm10')}</span></div>
-                        <div class="item"><span class="label">細顆粒物 PM₂.₅</span><span class="val">${fmt(d.pm25,'pm25')}</span></div>
-                    </div></div>`;
+                tHTML += `<tr><td><strong>${name}</strong></td><td><span class="tag ${type==='路邊'?'tag-roadside':'tag-general'}">${type}</span></td><td><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></td><td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td><td>${fmt(d.co,'co')}</td><td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td></tr>`;
+                mHTML += `<div class="station-card" style="border-left-color:${type==='路邊'?'#6f42c1':'#17a2b8'}"><div class="card-header"><strong>${name}</strong><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></div><div class="grid"><div class="item"><span class="label">NO₂ / O₃</span><span class="val">${fmt(d.no2,'no2')} / ${fmt(d.o3,'o3')}</span></div><div class="item"><span class="label">SO₂ / CO</span><span class="val">${fmt(d.so2,'so2')} / ${fmt(d.co,'co')}</span></div><div class="item"><span class="label">PM₁₀ / PM₂.₅</span><span class="val">${fmt(d.pm10,'pm10')} / ${fmt(d.pm25,'pm25')}</span></div></div></div>`;
             }
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
         }
@@ -128,13 +145,15 @@
             const tHead = document.getElementById('table-head');
             const tBody = document.getElementById('table-body');
             const mList = document.getElementById('mobile-list');
-            tHead.innerHTML = `<tr><th style="background:var(--weather)">地區</th><th style="background:var(--weather)">氣溫</th><th style="background:var(--weather)">濕度</th><th style="background:var(--weather)">最高/最低</th><th style="background:var(--weather)">氣溫變幅</th><th style="background:var(--weather)">風速(風向)</th><th style="background:var(--weather)">陣風</th><th style="background:var(--weather)">氣壓</th><th style="background:var(--weather)">草地溫</th></tr>`;
+            
+            tHead.innerHTML = `<tr><th class="weather-th">地區</th><th class="weather-th">氣溫</th><th class="weather-th">濕度</th><th class="weather-th">最高/最低</th><th class="weather-th">氣溫變幅</th><th class="weather-th">風速(風向)</th><th class="weather-th">陣風</th><th class="weather-th">氣壓</th><th class="weather-th">草地溫</th></tr>`;
+            
             let tHTML = '', mHTML = '';
             datas.forEach(row => {
                 const name = regionMap[row[0]] || row[0].toUpperCase();
                 if (!row[1]) return;
                 tHTML += `<tr><td><strong>${name}</strong></td><td class="temp-val">${row[1]}°C</td><td>${row[2]}%</td><td>${row[5]}°C / ${row[6]}°C</td><td>${row[7]}°C</td><td>${row[4]} km/h (${row[3]})</td><td>${row[8]?row[8]+' km/h':'-'}</td><td>${row[9]?row[9]+' hPa':'-'}</td><td>${row[10]?row[10]+'°C':'-'}</td></tr>`;
-                mHTML += `<div class="station-card" style="border-left-color:var(--weather)"><div class="card-header"><div class="station-name-mobile">${name}</div><div class="temp-val">${row[1]}°C</div></div><div class="grid"><div class="item"><span class="label">最高 / 最低</span><span class="val">${row[5]}°C / ${row[6]}°C</span></div><div class="item"><span class="label">相對濕度</span><span class="val">${row[2]}%</span></div><div class="item"><span class="label">風速 (風向)</span><span class="val">${row[4]} km/h (${row[3]})</span></div><div class="item"><span class="label">平均海平面氣壓</span><span class="val">${row[9]||'-'} hPa</span></div></div></div>`;
+                mHTML += `<div class="station-card" style="border-left-color:var(--weather)"><div class="card-header"><strong>${name}</strong><span class="temp-val">${row[1]}°C</span></div><div class="grid"><div class="item"><span class="label">最高 / 最低</span><span class="val">${row[5]}°C / ${row[6]}°C</span></div><div class="item"><span class="label">相對濕度</span><span class="val">${row[2]}%</span></div><div class="item"><span class="label">風速 (風向)</span><span class="val">${row[4]} km/h (${row[3]})</span></div><div class="item"><span class="label">氣壓</span><span class="val">${row[9]||'-'} hPa</span></div></div></div>`;
             });
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
         }
@@ -150,9 +169,11 @@
             <option value="一般">只看「一般監測站」</option>
             <option value="WEATHER">--- 各區即時天氣 (JSON) ---</option>
         </select>
-        <div class="status-bar">數據時間: <span id="xml-date">讀取中...</span> | <button onclick="loadData()" style="border:none;background:none;color:var(--p);font-weight:bold;cursor:pointer;">🔄 更新</button> [<span id="manual-time">--:--:--</span>]</div>
+        <div class="status-bar">數據時間: <span id="xml-date">讀取中...</span> | <button onclick="loadData()" style="border:1px solid var(--p); border-radius:4px; padding:2px 8px; cursor:pointer; background:white; color:var(--p); font-weight:bold;">🔄 強制更新數據</button> [<span id="manual-time">--:--:--</span>]</div>
     </div>
-    <div class="desktop-view"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div>
+    <div class="desktop-view">
+        <table><thead id="table-head"></thead><tbody id="table-body"></tbody></table>
+    </div>
     <div id="mobile-list" class="mobile-view"></div>
 </body>
 </html>
