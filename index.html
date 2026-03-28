@@ -14,10 +14,19 @@
         #xml-date { font-weight: bold; color: #333; }
         #manual-time { color: var(--p); font-weight: bold; }
         #debug-info { color: var(--red); font-weight: bold; margin-top: 5px; font-size: 0.9rem; }
+        
         .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; }
         .tag-general { background: var(--general); }
         .tag-roadside { background: var(--roadside); }
-        .aqhi-val { font-weight: 900; font-size: 1.4rem; color: #e67e22; }
+        
+        /* 你指定的 AQHI 顏色定義 */
+        .aqhi-box { font-weight: bold; font-size: 1rem; } /* 跟地區名稱字體一樣大 */
+        .aq-low { color: green; }      /* 1-3 低 */
+        .aq-mid { color: orange; }     /* 4-6 中 */
+        .aq-high { color: red; }       /* 7 高 */
+        .aq-vhigh { color: brown; }    /* 8-10 甚高 */
+        .aq-serious { color: black; }  /* 10+ 嚴重 */
+
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
@@ -25,7 +34,7 @@
         .sub-label { display: block; font-size: 0.7rem; font-weight: normal; opacity: 0.9; }
         .mobile-view { display: none; margin-top: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 8px solid #ccc; }
-        .card-header { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .card-header { font-size: 1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .item { text-align: center; padding: 8px 0; background: #fafafa; border-radius: 8px; }
         .label { font-size: 0.7rem; color: #666; display: block; }
@@ -39,38 +48,62 @@
         let stationOrder = []; 
         const TH = { no2: 200, o3: 160, so2: 50, pm10: 100, pm25: 50 };
 
+        function formatAQHI(rawStr) {
+            if (!rawStr || rawStr === "-") return { html: "-", class: "" };
+            
+            const parts = rawStr.split("-");
+            const info = parts[0].trim(); // 獲取 "4中" 或 "10+嚴重"
+            const numMatch = info.match(/\d+/);
+            const textMatch = info.match(/[\u4e00-\u9fa5]+/);
+            
+            if (!numMatch) return { html: rawStr, class: "" };
+
+            const val = parseInt(numMatch[0]);
+            const isPlus = info.includes("+");
+            const levelText = textMatch ? textMatch[0] : "";
+            
+            let colorClass = "";
+            // 根據你提供的規則分配顏色
+            if (isPlus || val > 10 || info.includes("嚴重")) colorClass = "aq-serious";
+            else if (val >= 8) colorClass = "aq-vhigh";
+            else if (val === 7) colorClass = "aq-high";
+            else if (val >= 4) colorClass = "aq-mid";
+            else colorClass = "aq-low";
+
+            return {
+                html: `${val}${isPlus?'+':''} (${levelText})`,
+                class: colorClass
+            };
+        }
+
         async function loadData() {
             const debug = document.getElementById('debug-info');
-            debug.innerText = "正在讀取數據...";
-            debug.style.display = "block";
-
+            debug.innerText = "數據更新中...";
             try {
                 const [resP, resA] = await Promise.all([
                     fetch('data.xml?v=' + Date.now()),
                     fetch('aqhi_index.xml?v=' + Date.now())
                 ]);
 
-                if (!resP.ok || !resA.ok) throw new Error("XML 載入失敗，請確認 GitHub Actions 已執行成功");
+                if (!resP.ok || !resA.ok) throw new Error("XML 讀取失敗");
 
                 const xmlP = new DOMParser().parseFromString(await resP.text(), "text/xml");
                 const xmlA = new DOMParser().parseFromString(await resA.text(), "text/xml");
 
-                // 1. 建立 AQHI 對照表 (使用模糊配對邏輯)
-                const aqhiRaw = [];
+                const aqhiMap = {};
                 const itemsA = xmlA.getElementsByTagName("item");
                 for (let i = 0; i < itemsA.length; i++) {
                     const desc = itemsA[i].getElementsByTagName("description")[0]?.textContent || "";
-                    // 攞走所有空白，統一格式
-                    const cleanDesc = desc.replace(/\s+/g, ""); 
-                    aqhiRaw.push(cleanDesc);
+                    if (desc.includes(" : ")) {
+                        const p = desc.split(" : ");
+                        aqhiMap[p[0].trim()] = p[1].trim();
+                    }
                 }
-                console.log("AQHI 原始數據:", aqhiRaw);
 
-                // 2. 解析污染物並配對 AQHI
                 const itemsP = xmlP.getElementsByTagName("PollutantConcentration");
                 const tempMap = {}; 
                 stationOrder = [];
-                let maxDateObj = new Date(0), maxDateStr = "-- --- ---- --:--";
+                let maxDateStr = "-- --- ---- --:--", maxDateObj = new Date(0);
 
                 for (let i = 0; i < itemsP.length; i++) {
                     const name = itemsP[i].getElementsByTagName("StationName")[0].textContent.trim();
@@ -85,22 +118,18 @@
 
                     if (!stationOrder.includes(name)) stationOrder.push(name);
 
-                    // 模糊配對 AQHI：喺 aqhiRaw 陣列入面搵邊條字串包含咗個地區名
-                    let foundAQHI = "-";
-                    for (let rawStr of aqhiRaw) {
-                        if (rawStr.includes(name)) {
-                            const splitParts = rawStr.split(":");
-                            if (splitParts.length > 1) {
-                                foundAQHI = splitParts[1];
-                                break;
-                            }
+                    let rawAQHI = "-";
+                    for (let key in aqhiMap) {
+                        if (key.includes(name) || name.includes(key)) {
+                            rawAQHI = aqhiMap[key];
+                            break;
                         }
                     }
 
                     if (!tempMap[name] || cTime > tempMap[name].rawTime) {
                         tempMap[name] = {
                             name, 
-                            aqhi: foundAQHI, 
+                            aqhiObj: formatAQHI(rawAQHI), 
                             rawTime: cTime,
                             type: ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般",
                             no2: itemsP[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
@@ -122,8 +151,7 @@
                 document.getElementById('manual-time').innerText = new Date().toTimeString().split(' ')[0];
                 debug.style.display = "none";
             } catch (e) {
-                debug.innerText = "❌ 系統錯誤: " + e.message;
-                console.error(e);
+                debug.innerText = "❌ " + e.message;
             }
         }
 
@@ -138,8 +166,27 @@
                 if (!d || (filter !== 'ALL' && d.type !== filter && d.name !== filter)) return;
                 const isRoad = d.type === "路邊", tag = `<span class="tag ${isRoad?'tag-roadside':'tag-general'}">${d.type}</span>`;
                 
-                tHTML += `<tr><td><strong>${d.name}</strong></td><td>${tag}</td><td class="aqhi-val">${d.aqhi}</td><td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td><td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td></tr>`;
-                mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}"><div class="card-header"><span>${d.name} ${tag}</span><span class="aqhi-val">AQHI: ${d.aqhi}</span></div><div class="grid"><div class="item"><span class="label">二氧化氮 (NO₂)</span><span class="val">${fmt(d.no2,'no2')}</span></div><div class="item"><span class="label">臭氧 (O₃)</span><span class="val">${fmt(d.o3,'o3')}</span></div><div class="item"><span class="label">二氧化硫 (SO₂)</span><span class="val">${fmt(d.so2,'so2')}</span></div><div class="item"><span class="label">可吸入粒子 (PM₁₀)</span><span class="val">${fmt(d.pm10,'pm10')}</span></div><div class="item" style="grid-column: span 2;"><span class="label">細顆粒物 (PM₂.₅)</span><span class="val">${fmt(d.pm25,'pm25')}</span></div></div></div>`;
+                tHTML += `<tr>
+                    <td><strong>${d.name}</strong></td>
+                    <td>${tag}</td>
+                    <td><span class="aqhi-box ${d.aqhiObj.class}">${d.aqhiObj.html}</span></td>
+                    <td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td>
+                    <td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td>
+                </tr>`;
+                
+                mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}">
+                    <div class="card-header">
+                        <span>${d.name} ${tag}</span>
+                        <span class="aqhi-box ${d.aqhiObj.class}">AQHI: ${d.aqhiObj.html}</span>
+                    </div>
+                    <div class="grid">
+                        <div class="item"><span class="label">二氧化氮 (NO₂)</span><span class="val">${fmt(d.no2,'no2')}</span></div>
+                        <div class="item"><span class="label">臭氧 (O₃)</span><span class="val">${fmt(d.o3,'o3')}</span></div>
+                        <div class="item"><span class="label">二氧化硫 (SO₂)</span><span class="val">${fmt(d.so2,'so2')}</span></div>
+                        <div class="item"><span class="label">可吸入粒子 (PM₁₀)</span><span class="val">${fmt(d.pm10,'pm10')}</span></div>
+                        <div class="item" style="grid-column: span 2;"><span class="label">細顆粒物 (PM₂.₅)</span><span class="val">${fmt(d.pm25,'pm25')}</span></div>
+                    </div>
+                </div>`;
             });
             tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
         }
@@ -163,7 +210,7 @@
     </div>
     <div class="desktop-view">
         <table>
-            <thead><tr><th>測站</th><th>類型</th><th style="background:#444">AQHI<span class="sub-label">指數</span></th><th>二氧化氮<span class="sub-label">(NO₂)</span></th><th>臭氧<span class="sub-label">(O₃)</span></th><th>二氧化硫<span class="sub-label">(SO₂)</span></th><th>可吸入粒子<span class="sub-label">(PM₁₀)</span></th><th>細顆粒物<span class="sub-label">(PM₂.₅)</span></th></tr></thead>
+            <thead><tr><th>測站</th><th>類型</th><th style="background:#444">AQHI 指數</th><th>二氧化氮<span class="sub-label">(NO₂)</span></th><th>臭氧<span class="sub-label">(O₃)</span></th><th>二氧化硫<span class="sub-label">(SO₂)</span></th><th>可吸入粒子<span class="sub-label">(PM₁₀)</span></th><th>細顆粒物<span class="sub-label">(PM₂.₅)</span></th></tr></thead>
             <tbody id="table-body"></tbody>
         </table>
     </div>
