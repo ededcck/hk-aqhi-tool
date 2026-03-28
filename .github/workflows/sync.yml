@@ -3,7 +3,11 @@ name: Sync Weather and Air Quality Data
 on:
   schedule:
     - cron: '*/10 * * * *' # 每 10 分鐘自動執行一次
-  workflow_dispatch:      # 容許手動喺 GitHub Actions 頁面啟動
+  workflow_dispatch:      # 容許手動手動啟動
+
+# 關鍵：必須加入呢段，否則無權 Push 改動返去 Repo
+permissions:
+  contents: write
 
 jobs:
   update-data:
@@ -12,20 +16,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Download Pollutant Index (XML)
-        run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/24pc_ChT.xml" -o data.xml
-
-      - name: Download AQHI Index (XML)
-        run: curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/aqhi_ind_rss_ChT.xml" -o aqhi_index.xml
-
-      - name: Download Regional Weather (JSON)
-        run: curl -sL "https://www.hko.gov.hk/wxinfo/json/region.json" -o region.json
+      - name: Download Data with Cache Busting
+        run: |
+          # 加入隨機數防止下載到舊嘅緩存資料
+          curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/24pc_ChT.xml?t=$(date +%s)" -o data.xml
+          curl -sL "https://www.aqhi.gov.hk/epd/ddata/html/out/aqhi_ind_rss_ChT.xml?t=$(date +%s)" -o aqhi_index.xml
+          curl -sL "https://www.hko.gov.hk/wxinfo/json/region.json?t=$(date +%s)" -o region.json
 
       - name: Commit and Push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data.xml aqhi_index.xml region.json
-          # 如果數據冇變動，就唔會 commit，避免報錯
-          git commit -m "Auto sync: Update Weather and Air Quality data" || exit 0
-          git push
+          
+          # 檢查是否有變動
+          if git diff --staged --quiet; then
+            echo "No changes detected, skipping commit."
+          else
+            git commit -m "Auto sync: $(date +'%Y-%m-%d %H:%M:%S') Update"
+            git push
+          fi
