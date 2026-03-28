@@ -19,14 +19,15 @@
         .tag-general { background: var(--general); }
         .tag-roadside { background: var(--roadside); }
         
-        /* 你指定的 AQHI 顏色定義 */
-        .aqhi-box { font-weight: bold; font-size: 1rem; } /* 跟地區名稱字體一樣大 */
-        .aq-low { color: green; }      /* 1-3 低 */
-        .aq-mid { color: orange; }     /* 4-6 中 */
-        .aq-high { color: red; }       /* 7 高 */
-        .aq-vhigh { color: brown; }    /* 8-10 甚高 */
-        .aq-serious { color: black; }  /* 10+ 嚴重 */
+        /* AQHI 樣式 */
+        .aqhi-container { display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .aqhi-num { font-weight: bold; font-size: 1rem; } /* 跟地區名稱字體一樣大 */
+        .aqhi-icon { height: 1.2rem; width: auto; vertical-align: middle; } /* Icon 高度 */
 
+        /* 污染物超標樣式 */
+        .exceed { color: var(--red); font-weight: bold; }
+
+        /* 佈局樣式 */
         .desktop-view { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
@@ -35,11 +36,11 @@
         .mobile-view { display: none; margin-top: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 8px solid #ccc; }
         .card-header { font-size: 1rem; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .card-header-right { display: flex; align-items: center; gap: 5px; }
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .item { text-align: center; padding: 8px 0; background: #fafafa; border-radius: 8px; }
         .label { font-size: 0.7rem; color: #666; display: block; }
         .val { font-size: 1rem; font-weight: bold; }
-        .exceed { color: var(--red); }
         @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
     </style>
 
@@ -48,48 +49,51 @@
         let stationOrder = []; 
         const TH = { no2: 200, o3: 160, so2: 50, pm10: 100, pm25: 50 };
 
+        // Icon 網址定義
+        const ICON_URLS = {
+            "低": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_1.svg",
+            "中": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_2.svg",
+            "高": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_3.svg",
+            "甚高": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_4.svg",
+            "嚴重": "https://www.aqhi.gov.hk/common/images/icon/icon_legend_type_5.svg"
+        };
+
+        // 格式化 AQHI：使用 Icon 取代文字
         function formatAQHI(rawStr) {
-            if (!rawStr || rawStr === "-") return { html: "-", class: "" };
+            if (!rawStr || rawStr === "-") return "-";
             
-            const parts = rawStr.split("-");
-            const info = parts[0].trim(); // 獲取 "4中" 或 "10+嚴重"
-            const numMatch = info.match(/\d+/);
-            const textMatch = info.match(/[\u4e00-\u9fa5]+/);
+            const numMatch = rawStr.match(/\d+(\+)?/);
+            const textMatch = rawStr.match(/(低|中|高|甚高|嚴重)/);
             
-            if (!numMatch) return { html: rawStr, class: "" };
+            if (!numMatch) return rawStr;
 
-            const val = parseInt(numMatch[0]);
-            const isPlus = info.includes("+");
+            const valStr = numMatch[0];
             const levelText = textMatch ? textMatch[0] : "";
-            
-            let colorClass = "";
-            // 根據你提供的規則分配顏色
-            if (isPlus || val > 10 || info.includes("嚴重")) colorClass = "aq-serious";
-            else if (val >= 8) colorClass = "aq-vhigh";
-            else if (val === 7) colorClass = "aq-high";
-            else if (val >= 4) colorClass = "aq-mid";
-            else colorClass = "aq-low";
+            const iconUrl = ICON_URLS[levelText] || "";
 
-            return {
-                html: `${val}${isPlus?'+':''} (${levelText})`,
-                class: colorClass
-            };
+            let iconHtml = "";
+            if (iconUrl) {
+                iconHtml = `<img src="${iconUrl}" alt="${levelText}" class="aqhi-icon" title="${levelText}">`;
+            }
+
+            return `<div class="aqhi-container"><span class="aqhi-num">${valStr}</span> ${iconHtml}</div>`;
         }
 
         async function loadData() {
             const debug = document.getElementById('debug-info');
-            debug.innerText = "數據更新中...";
+            debug.innerText = "讀取中...";
             try {
                 const [resP, resA] = await Promise.all([
                     fetch('data.xml?v=' + Date.now()),
                     fetch('aqhi_index.xml?v=' + Date.now())
                 ]);
 
-                if (!resP.ok || !resA.ok) throw new Error("XML 讀取失敗");
+                if (!resP.ok || !resA.ok) throw new Error("XML 讀取失敗，請檢查 Actions");
 
                 const xmlP = new DOMParser().parseFromString(await resP.text(), "text/xml");
                 const xmlA = new DOMParser().parseFromString(await resA.text(), "text/xml");
 
+                // 解析 AQHI RSS
                 const aqhiMap = {};
                 const itemsA = xmlA.getElementsByTagName("item");
                 for (let i = 0; i < itemsA.length; i++) {
@@ -118,6 +122,7 @@
 
                     if (!stationOrder.includes(name)) stationOrder.push(name);
 
+                    // 配對 AQHI
                     let rawAQHI = "-";
                     for (let key in aqhiMap) {
                         if (key.includes(name) || name.includes(key)) {
@@ -129,7 +134,7 @@
                     if (!tempMap[name] || cTime > tempMap[name].rawTime) {
                         tempMap[name] = {
                             name, 
-                            aqhiObj: formatAQHI(rawAQHI), 
+                            aqhiHtml: formatAQHI(rawAQHI), 
                             rawTime: cTime,
                             type: ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般",
                             no2: itemsP[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
@@ -151,7 +156,7 @@
                 document.getElementById('manual-time').innerText = new Date().toTimeString().split(' ')[0];
                 debug.style.display = "none";
             } catch (e) {
-                debug.innerText = "❌ " + e.message;
+                debug.innerText = "❌ 錯誤: " + e.message;
             }
         }
 
@@ -169,7 +174,7 @@
                 tHTML += `<tr>
                     <td><strong>${d.name}</strong></td>
                     <td>${tag}</td>
-                    <td><span class="aqhi-box ${d.aqhiObj.class}">${d.aqhiObj.html}</span></td>
+                    <td>${d.aqhiHtml}</td>
                     <td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td>
                     <td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td>
                 </tr>`;
@@ -177,7 +182,7 @@
                 mHTML += `<div class="station-card" style="border-left-color:${isRoad?'#6f42c1':'#17a2b8'}">
                     <div class="card-header">
                         <span>${d.name} ${tag}</span>
-                        <span class="aqhi-box ${d.aqhiObj.class}">AQHI: ${d.aqhiObj.html}</span>
+                        <div class="card-header-right">AQHI: ${d.aqhiHtml}</div>
                     </div>
                     <div class="grid">
                         <div class="item"><span class="label">二氧化氮 (NO₂)</span><span class="val">${fmt(d.no2,'no2')}</span></div>
