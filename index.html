@@ -9,11 +9,11 @@
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 10px; color: #333; }
         
         .header-section { position: sticky; top: 0; background: var(--bg); z-index: 100; padding: 10px; border-bottom: 2px solid #ddd; text-align: center; }
-        select { padding: 12px; border: 2px solid var(--p); border-radius: 10px; width: 100%; max-width: 450px; display: block; margin: 5px auto; font-size: 1rem; background: white; cursor: pointer; }
+        select { padding: 12px; border: 2px solid var(--p); border-radius: 10px; width: 100%; max-width: 450px; display: block; margin: 5px auto; font-size: 1rem; background: white; cursor: pointer; outline: none; }
         .status-bar { font-size: 0.8rem; color: #666; margin-top: 5px; }
 
         .view-container { background: var(--white); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1100px; }
         th, td { padding: 10px 5px; text-align: center; border-bottom: 1px solid #eee; font-size: 0.9rem; }
         th { color: white; background: var(--p); position: sticky; top: 0; white-space: nowrap; }
         
@@ -23,9 +23,12 @@
         .temp-val { color: var(--red); font-weight: bold; }
         
         /* 空氣表專用樣式 */
+        .aqhi-container { display: flex; align-items: center; justify-content: center; min-height: 35px; }
+        .aqhi-level-icon { height: 1.8rem; width: auto; vertical-align: middle; }
         .tag { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; color: white; margin-left: 5px; font-weight: normal; }
         .tag-general { background: var(--general); }
         .tag-roadside { background: var(--roadside); }
+        .exceed { color: var(--red); font-weight: bold; }
     </style>
 </head>
 <body>
@@ -33,19 +36,22 @@
     <div class="header-section">
         <select id="main-selector" onchange="render()">
             <option value="WEATHER">--- 各區即時天氣 ---</option>
-            <option value="ALL">顯示所有空氣監測站 (污染物指數)</option>
+            <option value="ALL">顯示所有空氣監測站 (污染物+AQHI)</option>
             <option value="路邊">只看路邊空氣監測站</option>
             <option value="一般">只看一般空氣監測站</option>
         </select>
         <div class="status-bar">
             數據時間: <span id="data-time-label">-- ---, ---- --:--</span> | 
             手動更新: <span id="manual-time">--:--:--</span>
-            <button onclick="loadData()" style="border:none; background:none; color:var(--p); font-weight:bold; cursor:pointer; margin-left:5px;">[🔄 刷新]</button>
+            <button onclick="loadData()" style="border:none; background:none; color:var(--p); font-weight:bold; cursor:pointer; margin-left:5px;">[🔄 刷新數據]</button>
         </div>
     </div>
 
     <div id="data-display">
-        <div class="view-container" style="padding:50px; text-align:center;">正在從 GitHub 讀取數據...</div>
+        <div class="view-container" style="padding:50px; text-align:center;">
+            正在從 GitHub 讀取數據...<br>
+            <span style="font-size:0.8rem;color:#777;">(如長時間無反應，請確保 GitHub Actions 已成功執行過一次sync。)</span>
+        </div>
     </div>
 
     <script>
@@ -54,17 +60,27 @@
         };
 
         let airData = {}, weatherData = { list: [], btime: "" };
+        const TH = { no2: 200, o3: 160, so2: 50, co: 1000, pm10: 100, pm25: 50 };
+
+        // 原本漏咗嘅 AQHI Icon 顯示函數
+        function formatAQHI(rawStr) {
+            if (!rawStr || rawStr === "-") return "-";
+            const numMatch = rawStr.match(/(\d+)/);
+            const isPlus = rawStr.includes("+");
+            const isSerious = rawStr.includes("嚴重");
+            if (!numMatch) return "-";
+            let level = parseInt(numMatch[0]);
+            if (isPlus || isSerious || level > 10) level = 11;
+            else if (level < 1) level = 1;
+            const iconUrl = `https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${level}.svg`;
+            return `<div class="aqhi-container"><img src="${iconUrl}" class="aqhi-level-icon" alt="Level ${level}"></div>`;
+        }
 
         // 格式化 btime 為 29 Mar, 2026 03:40
         function formatBTime(raw) {
             if (!raw || raw.length < 12) return "-- ---, ---- --:--";
             const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            const year = raw.substring(0, 4);
-            const month = months[parseInt(raw.substring(4, 6)) - 1];
-            const day = raw.substring(6, 8);
-            const hour = raw.substring(8, 10);
-            const min = raw.substring(10, 12);
-            return `${day} ${month}, ${year} ${hour}:${min}`;
+            return `${raw.substring(6, 8)} ${months[parseInt(raw.substring(4, 6)) - 1]}, ${raw.substring(0, 4)} ${raw.substring(8, 10)}:${raw.substring(10, 12)}`;
         }
 
         async function loadData() {
@@ -80,21 +96,32 @@
                 const wJson = await resWeather.json();
                 weatherData = { list: wJson.region, btime: formatBTime(wJson.btime) };
 
-                // 2. 處理空氣污染物 XML (24pc_ChT.xml)
-                const airXmlText = await resAir.text();
+                // 2. 處理 AQHI XML (原本漏咗嘅)
+                const aqXmlText = await resAQHI.text();
                 const parser = new DOMParser();
+                const aqXml = parser.parseFromString(aqXmlText, "text/xml");
+                const descSource = Array.from(aqXml.getElementsByTagName("description")).map(d => d.textContent);
+
+                // 3. 處理空氣污染物 XML (含一氧化碳)
+                const airXmlText = await resAir.text();
                 const airXml = parser.parseFromString(airXmlText, "text/xml");
                 const items = airXml.getElementsByTagName("PollutantConcentration");
                 
                 airData = {};
                 for (let i = 0; i < items.length; i++) {
                     const name = items[i].getElementsByTagName("StationName")[0].textContent.trim();
+                    
+                    // 匹配 AQHI (原本漏咗嘅匹配邏輯)
+                    let rawAQHI = descSource.find(d => d.includes(name)) || "-";
+
                     airData[name] = {
                         name,
+                        aqhiHtml: formatAQHI(rawAQHI), // Icon 顯示
                         type: ["銅鑼灣", "中環", "旺角"].includes(name) ? "路邊" : "一般",
                         no2: items[i].getElementsByTagName("二氧化氮")[0]?.textContent || "-",
                         o3: items[i].getElementsByTagName("臭氧")[0]?.textContent || "-",
                         so2: items[i].getElementsByTagName("二氧化硫")[0]?.textContent || "-",
+                        co: items[i].getElementsByTagName("一氧化碳")[0]?.textContent || "-", // 新增回 CO
                         pm10: items[i].getElementsByTagName("可吸入懸浮粒子")[0]?.textContent || "-",
                         pm25: items[i].getElementsByTagName("細顆粒物")[0]?.textContent || "-"
                     };
@@ -104,7 +131,7 @@
                 document.getElementById('manual-time').innerText = new Date().toLocaleTimeString();
             } catch (e) {
                 console.error("數據加載失敗:", e);
-                document.getElementById('data-display').innerHTML = '<div style="color:red; text-align:center; padding:20px;">無法讀取數據，請確保 GitHub Actions 已成功執行並生成檔案。</div>';
+                document.getElementById('data-display').innerHTML = `<div style="color:red; text-align:center; padding:20px;">無法讀取數據。<br>數據時間：${new Date().toLocaleTimeString()}<br><br>請確保您已經將檔案 push 上 GitHub，並且 `.github/workflows/sync.yml` 已經成功執行過一次。<br><br>在本地（file://）直接打開 HTML 檔通常會因為 CORS 限制而無法顯示天氣資料。</div>`;
             }
         }
 
@@ -138,17 +165,21 @@
                 });
                 container.innerHTML = html + `</tbody></table></div>`;
             } else {
-                timeLabel.innerText = "空氣污染即時數據";
+                timeLabel.innerText = "空氣污染即時數據 (含 AQHI 指數)";
+                // 在 Header 加回 AQHI 指數，並確保一氧化碳 CO 欄位存在
                 let html = `<div class="view-container"><table><thead><tr>
-                    <th>監測站</th><th>類型</th><th>NO₂</th><th>O₃</th><th>SO₂</th><th>PM₁₀</th><th>PM₂.₅</th>
+                    <th>監測站</th><th>類型</th><th style="background:#444;">AQHI</th><th>NO₂</th><th>O₃</th><th>SO₂</th><th>CO</th><th>PM₁₀</th><th>PM₂.₅</th>
                 </tr></thead><tbody>`;
                 
+                // 超標高亮格式化
+                const fmt = (v, k) => (v !== "-" && parseFloat(v) > TH[k]) ? `<span class="exceed">${v}</span>` : v;
+
                 Object.values(airData).forEach(d => {
                     if (filter !== 'ALL' && d.type !== filter && d.name !== filter) return;
                     html += `<tr>
-                        <td class="region-bold">${d.name}</td>
+                        <td class="region-cell region-bold">${d.name}</td>
                         <td><span class="tag ${d.type==='路邊'?'tag-roadside':'tag-general'}">${d.type}</span></td>
-                        <td>${d.no2}</td><td>${d.o3}</td><td>${d.so2}</td><td>${d.pm10}</td><td>${d.pm25}</td>
+                        <td>${d.aqhiHtml}</td> <td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td><td>${fmt(d.so2,'so2')}</td><td>${fmt(d.co,'co')}</td><td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td>
                     </tr>`;
                 });
                 container.innerHTML = html + `</tbody></table></div>`;
