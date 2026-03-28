@@ -1,0 +1,26 @@
+name: Sync AQHI Data
+on:
+  schedule:
+    - cron: '*/30 * * * *' # 每 30 分鐘自動執行一次
+  workflow_dispatch:      # 畀你手動撳掣執行
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write    # 畀權限佢寫入 data.xml
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download XML from EPD
+        run: |
+          curl -s "https://www.aqhi.gov.hk/epd/ddata/html/out/24pc_ChT.xml" -o data.xml
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add data.xml
+          git commit -m "Update AQHI data" || exit 0
+          git push
