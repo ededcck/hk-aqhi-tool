@@ -8,7 +8,6 @@
         :root { --p: #0056b3; --bg: #f0f2f5; --red: #d9534f; --white: #ffffff; --general: #17a2b8; --roadside: #6f42c1; --weather: #28a745; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 0; color: #333; }
         
-        /* 1. 將所有頂部固定嘅嘢包埋一齊 */
         .sticky-wrapper {
             position: sticky;
             top: 0;
@@ -29,14 +28,11 @@
 
         .status-bar { font-size: 0.8rem; color: #555; margin-top: 5px; text-align: center; }
         
-        /* 2. 表格容器 */
         .desktop-view { background: var(--white); margin: 10px; border-radius: 8px; overflow: visible; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1050px; }
 
-        /* 3. 標題行固定 - 依家 top: 0 係相對於上面層 header 底部 */
         thead th { 
             position: sticky; 
-            top: 138px; /* 大約高度，我下面會用 JavaScript 自動修正呢個數值 */
             z-index: 1500;
             background: var(--p); 
             color: white; 
@@ -46,30 +42,20 @@
         }
         
         .weather-th { background: var(--weather) !important; }
-
         td { padding: 12px 5px; text-align: center; border-bottom: 1px solid #eee; font-size: 0.9rem; }
         .temp-val { color: var(--red); font-weight: bold; font-size: 1.1rem; }
         .exceed { color: var(--red); font-weight: bold; }
+        .aqhi-level-icon { height: 1.8rem; }
 
-        /* 手機版樣式 */
         .mobile-view { display: none; padding: 10px; }
         .station-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 8px solid #ccc; }
-        .card-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .item { text-align: center; padding: 8px 4px; background: #fafafa; border-radius: 8px; }
-        .label { font-size: 0.65rem; color: #666; display: block; }
-        .val { font-size: 1rem; font-weight: bold; }
 
-        @media (max-width: 768px) { 
-            .desktop-view { display: none; } 
-            .mobile-view { display: block; } 
-        }
+        @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
     </style>
 
     <script>
-        const regionMap = {"hka":"赤鱲角","cch":"長洲","hpv":"跑馬地","hko":"天文台","hkp":"香港公園","se1":"啟德跑道公園","ksc":"滘西洲","kp":"京士柏","klt":"九龍城","ktg":"觀塘","lfs":"流浮山","ngp":"昂坪","tyw":"北潭涌","pen":"坪洲","skg":"西貢","sha":"沙田","ssp":"深水埗","skw":"筲箕灣","sek":"石崗","ssh":"上水","sty":"赤柱","tkl":"打鼓嶺","plc":"大美督","tpo":"大埔","vp1":"山頂","jkb":"將軍澳","ty1":"青衣","twn":"可觀","tw":"門谷","tun":"屯門","wgl":"橫瀾島","wlp":"濕地","hks":"黃竹坑","wts":"黃大仙","ylp":"元朗公園","cwb":"清水灣","tms":"大帽山","tc":"東涌","tls":"大老山"};
+        const regionMap = {"hka":"赤鱲角","cch":"長洲","hpv":"跑馬地","hko":"天文台","hkp":"香港公園","se1":"啟德跑道公園","ksc":"滘西洲","kp":"京士柏","klt":"九龍城","ktg":"觀塘","lfs":"流浮山","ngp":"昂坪","tyw":"北潭涌","pen":"坪洲","skg":"西貢","sha":"沙田","ssp":"深水埗","skw":"筲灣","sek":"石崗","ssh":"上水","sty":"赤柱","tkl":"打鼓嶺","plc":"大美督","tpo":"大埔","vp1":"山頂","jkb":"將軍澳","ty1":"青衣","twn":"可觀","tw":"荃灣","tun":"屯門","wgl":"橫瀾島","wlp":"濕地","hks":"黃竹坑","wts":"黃大仙","ylp":"元朗公園","cwb":"清水灣","tms":"大帽山","tc":"東涌","tls":"大老山"};
 
-        // 自動計算 Header 高度，防止錯位
         function adjustSticky() {
             const headerHeight = document.querySelector('.sticky-wrapper').offsetHeight;
             const ths = document.querySelectorAll('thead th');
@@ -79,8 +65,23 @@
         async function loadData() {
             const mode = document.getElementById('station-selector').value;
             const timeLabel = document.getElementById('xml-date');
-            const bust = "?v=" + Date.now();
-            const fetchOpt = { cache: "reload", headers: { 'Cache-Control': 'no-cache' } };
+            const tBody = document.getElementById('table-body');
+            
+            if(tBody) tBody.innerHTML = "<tr><td colspan='9'>正在向伺服器提取最新數據...</td></tr>";
+            timeLabel.innerText = "連線中...";
+
+            // 終極破快取字串：時間戳 + 隨機數
+            const bust = "?t=" + Date.now() + "&r=" + Math.random().toString(36).substring(7);
+            
+            // 強制級別設為 no-store，完全跳過任何緩存
+            const fetchOpt = { 
+                cache: "no-store", 
+                headers: { 
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                } 
+            };
 
             try {
                 if (mode === 'WEATHER') {
@@ -98,14 +99,16 @@
                     renderAQHI(mode, xmlP, xmlA);
                 }
                 document.getElementById('manual-time').innerText = new Date().toTimeString().split(' ')[0];
-                setTimeout(adjustSticky, 50); // 渲染完後調整高度
-            } catch (e) { console.error(e); }
+                setTimeout(adjustSticky, 50);
+            } catch (e) { 
+                timeLabel.innerText = "更新失敗";
+                if(tBody) tBody.innerHTML = "<tr><td colspan='9' style='color:red'>讀取錯誤，請稍後再試</td></tr>";
+            }
         }
 
         function renderAQHI(filter, xmlP, xmlA) {
             const tHead = document.getElementById('table-head');
             const tBody = document.getElementById('table-body');
-            const mList = document.getElementById('mobile-list');
             const itemsP = xmlP.getElementsByTagName("PollutantConcentration");
             const aqhiSource = Array.from(xmlA.getElementsByTagName("item")).map(i => i.getElementsByTagName("description")[0]?.textContent || "");
 
@@ -119,7 +122,7 @@
             if(latestTimeStr) document.getElementById('xml-date').innerText = latestTimeStr.substring(0,16);
 
             tHead.innerHTML = `<tr><th>測站</th><th>類型</th><th style="background:#444;">AQHI</th><th>二氧化氮</th><th>臭氧</th><th>二氧化硫</th><th>一氧化碳</th><th>可吸入粒子</th><th>細顆粒物</th></tr>`;
-            let tHTML = '', mHTML = '';
+            let tHTML = '';
             for (let i = 0; i < itemsP.length; i++) {
                 if (itemsP[i].getElementsByTagName("DateTime")[0]?.textContent !== latestTimeStr) continue;
                 const name = itemsP[i].getElementsByTagName("StationName")[0]?.textContent.trim();
@@ -132,12 +135,9 @@
                 if (rawAQHI.includes("+") || rawAQHI.includes("嚴重") || lv > 10) lv = 11;
                 
                 const getVal = (tag) => itemsP[i].getElementsByTagName(tag)[0]?.textContent || "-";
-                const d = [getVal("二氧化氮"), getVal("臭氧"), getVal("二氧化硫"), getVal("一氧化碳"), getVal("可吸入懸浮粒子"), getVal("細顆粒物")];
-
-                tHTML += `<tr><td><strong>${name}</strong></td><td>${type}</td><td><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></td><td>${d[0]}</td><td>${d[1]}</td><td>${d[2]}</td><td>${d[3]}</td><td>${d[4]}</td><td>${d[5]}</td></tr>`;
-                mHTML += `<div class="station-card"><strong>${name}</strong> [${type}]<br>AQHI: ${lv}</div>`;
+                tHTML += `<tr><td><strong>${name}</strong></td><td>${type}</td><td><img src="https://www.aqhi.gov.hk/common/images/icon/icon_legend_level_${lv}.svg" class="aqhi-level-icon"></td><td>${getVal("二氧化氮")}</td><td>${getVal("臭氧")}</td><td>${getVal("二氧化硫")}</td><td>${getVal("一氧化碳")}</td><td>${getVal("可吸入懸浮粒子")}</td><td>${getVal("細顆粒物")}</td></tr>`;
             }
-            tBody.innerHTML = tHTML; mList.innerHTML = mHTML;
+            tBody.innerHTML = tHTML;
         }
 
         function renderWeather(datas) {
@@ -150,11 +150,11 @@
                 tHTML += `<tr><td><strong>${name}</strong></td><td class="temp-val">${row[1]}°C</td><td>${row[2]}%</td><td>${row[5]}°C / ${row[6]}°C</td><td>${row[7]}°C</td><td>${row[4]} km/h (${row[3]})</td><td>${row[8]||'-'}</td><td>${row[9]||'-'}</td><td>${row[10]||'-'}</td></tr>`;
             });
             tBody.innerHTML = tHTML;
-            document.getElementById('mobile-list').innerHTML = "<p style='text-align:center'>請切換至桌面版查看詳細天氣表格</p>";
+            document.getElementById('mobile-list').innerHTML = "<p style='text-align:center'>數據已更新，請在電腦查看詳細表格</p>";
         }
         
         window.onload = loadData;
-        window.onresize = adjustSticky; // 視窗縮放時重新計算
+        window.onresize = adjustSticky;
     </script>
 </head>
 <body>
@@ -171,7 +171,7 @@
             </select>
             <div class="status-bar">
                 數據時間: <span id="xml-date">--</span> | 
-                <button onclick="loadData()" style="border:1px solid var(--p); border-radius:4px; padding:2px 8px; cursor:pointer; background:white; color:var(--p); font-weight:bold;">🔄 強制更新數據</button> 
+                <button onclick="loadData()" style="border:2px solid var(--p); border-radius:6px; padding:3px 12px; cursor:pointer; background:white; color:var(--p); font-weight:bold; transition: 0.2s;">⚡ 終極強制更新</button> 
                 [<span id="manual-time">--:--:--</span>]
             </div>
         </div>
