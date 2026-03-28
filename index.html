@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>香港即時空氣污染物監測</title>
+    <style>
+        :root { --p: #0056b3; --bg: #f8f9fa; --red: #d9534f; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); padding: 15px; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); padding: 20px; overflow-x: auto; }
+        h1 { text-align: center; font-size: 1.5rem; color: #222; }
+        table { width: 100%; border-collapse: collapse; min-width: 700px; }
+        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
+        th { background: var(--p); color: white; white-space: nowrap; }
+        .exceed { color: var(--red); font-weight: bold; }
+        #status { text-align: center; margin-bottom: 15px; font-size: 0.9rem; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>香港各區污染物濃度 (μg/m³)</h1>
+    <div id="status">正在從 GitHub 數據庫讀取...</div>
+    <div class="card">
+        <table>
+            <thead>
+                <tr><th>測站</th><th>數據時間</th><th>NO₂</th><th>O₃</th><th>SO₂</th><th>CO</th><th>PM₁₀</th><th>PM₂.₅</th></tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const TH = { no2: 200, o3: 160, so2: 50, co: 10000, pm10: 100, pm25: 50 };
+        function fmt(v, t) {
+            let n = parseFloat(v);
+            return (!isNaN(n) && n > TH[t]) ? `<span class="exceed">${v}</span>` : v;
+        }
+
+        async function load() {
+            try {
+                // 直接讀取同 Repo 嘅 data.xml
+                const res = await fetch('data.xml?t=' + Date.now());
+                if(!res.ok) throw new Error('未搵到數據檔，請先執行 GitHub Action');
+                const txt = await res.text();
+                const xml = new DOMParser().parseFromString(txt, "text/xml");
+                const items = xml.getElementsByTagName("PollutantConcentration");
+                
+                const map = {};
+                for (let i = 0; i < items.length; i++) {
+                    const s = items[i].getElementsByTagName("StationName")[0].textContent;
+                    map[s] = {
+                        t: items[i].getElementsByTagName("DateTime")[0].textContent.replace(' +0800', ''),
+                        no2: items[i].getElementsByTagName("二氧化氮")[0].textContent,
+                        o3:  items[i].getElementsByTagName("臭氧")[0].textContent,
+                        so2: items[i].getElementsByTagName("二氧化硫")[0].textContent,
+                        co:  items[i].getElementsByTagName("一氧化碳")[0].textContent,
+                        pm10: items[i].getElementsByTagName("可吸入懸浮粒子")[0].textContent,
+                        pm25: items[i].getElementsByTagName("細顆粒物")[0].textContent
+                    };
+                }
+
+                const list = document.getElementById('list');
+                list.innerHTML = '';
+                Object.keys(map).sort().forEach(k => {
+                    const d = map[k];
+                    list.innerHTML += `<tr>
+                        <td><strong>${k}</strong></td>
+                        <td style="font-size:0.8em;color:#888">${d.t}</td>
+                        <td>${fmt(d.no2,'no2')}</td><td>${fmt(d.o3,'o3')}</td>
+                        <td>${fmt(d.so2,'so2')}</td><td>${fmt(d.co,'co')}</td>
+                        <td>${fmt(d.pm10,'pm10')}</td><td>${fmt(d.pm25,'pm25')}</td>
+                    </tr>`;
+                });
+                document.getElementById('status').innerText = "數據已同步 (每 30 分鐘自動更新)";
+            } catch (e) {
+                document.getElementById('status').innerText = "讀取失敗: " + e.message;
+            }
+        }
+        load();
+    </script>
+</body>
+</html>
