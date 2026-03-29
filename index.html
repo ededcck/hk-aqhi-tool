@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>香港天氣監測</title>
     <style>
-        :root { --p: #0056b3; --bg: #f0f2f5; --red: #d9534f; --white: #ffffff; --weather: #28a745; }
+        :root { --p: #0056b3; --bg: #f0f2f5; --red: #d9534f; --white: #ffffff; --weather: #28a745; --orange: #fd7e14; }
         body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; padding: 0; }
         .sticky-wrapper { position: sticky; top: 0; z-index: 2000; background: var(--bg); padding: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header-section { text-align: center; }
@@ -26,25 +26,75 @@
         .card-item { background: #f8f9fa; padding: 8px; border-radius: 8px; text-align: center; border: 1px solid #f0f0f0; }
         .card-label { font-size: 0.62rem; color: #777; display: block; margin-bottom: 3px; }
         .card-val { font-size: 0.85rem; font-weight: bold; }
+        
+        /* 遙控掣樣式 */
+        .remote-btn { border: 2px solid var(--orange); border-radius: 6px; padding: 2px 8px; cursor: pointer; background: white; color: var(--orange); font-weight: bold; margin-left: 5px; transition: 0.2s; }
+        .remote-btn:active { background: var(--orange); color: white; }
+
         @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
     </style>
 
     <script>
         const regionMap = {"hka":"赤鱲角","cch":"長洲","hpv":"跑馬地","hko":"天文台","hkp":"香港公園","se":"啟德","se1":"啟德跑道公園","ksc":"滘西洲","kp":"京士柏","klt":"九龍城","ktg":"觀塘","lfs":"流浮山","ngp":"昂坪","tyw":"北潭涌","pen":"坪洲","skg":"西貢","sha":"沙田","ssp":"深水埗","skw":"筲箕灣","sek":"石崗","ssh":"上水","sty":"赤柱","tkl":"打鼓嶺","plc":"大美督","tpo":"大埔","tls":"大隴","tc":"大老山","vp1":"山頂","jkb":"將軍澳","ty1":"青衣","twn":"荃灣可觀","tw":"荃灣城門谷","tun":"屯門","wgl":"橫瀾島","wlp":"濕地公園","hks":"黃竹坑","wts":"黃大仙","ylp":"元朗公園","cwb":"清水灣","tms":"大帽山"};
 
+        // 配置：請填寫你的 GitHub 資料
+        const GITHUB_CONFIG = {
+            owner: "你的GitHub帳號",
+            repo: "你的Repo名稱",
+            workflow: "sync.yml"
+        };
+
         function adjustSticky() {
             const h = document.querySelector('.sticky-wrapper')?.offsetHeight || 0;
             document.querySelectorAll('thead th').forEach(th => th.style.top = (h - 1) + 'px');
         }
 
+        // 核心功能：遠端觸發 GitHub Actions
+        async function triggerSync() {
+            let token = localStorage.getItem('gh_token');
+            if (!token) {
+                token = prompt("請輸入你的 GitHub Personal Access Token (需有 Actions 權限):");
+                if (token) localStorage.setItem('gh_token', token);
+                else return;
+            }
+
+            const btn = document.querySelector('.remote-btn');
+            const originalText = btn.innerText;
+            btn.innerText = "🚀 發送中...";
+            btn.disabled = true;
+
+            try {
+                const url = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/actions/workflows/${GITHUB_CONFIG.workflow}/dispatches`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    },
+                    body: JSON.stringify({ ref: 'main' })
+                });
+
+                if (res.status === 204) {
+                    alert("✅ 已成功叫醒 GitHub！請等 1-2 分鐘讓數據更新。");
+                } else {
+                    const error = await res.json();
+                    alert("❌ 失敗: " + (error.message || res.statusText));
+                    if (res.status === 401) localStorage.removeItem('gh_token');
+                }
+            } catch (e) {
+                alert("❌ 連線出錯");
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
         async function loadData() {
             const mode = document.getElementById('station-selector').value;
             const timeLabel = document.getElementById('xml-date');
-            
             document.getElementById('table-body').innerHTML = "<tr><td colspan='9'>正在更新數據...</td></tr>";
             timeLabel.innerText = "連線中...";
 
-            // 使用隨機數穿透快取
             const bust = `?refresh=${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
             
             try {
@@ -65,7 +115,6 @@
                 setTimeout(adjustSticky, 100);
             } catch (e) { 
                 timeLabel.innerText = "讀取失敗";
-                console.error(e);
             }
         }
 
@@ -100,12 +149,12 @@
         }
 
         function renderWeather(datas) {
-            document.getElementById('table-head').innerHTML = `<tr><th class="weather-th">地區</th><th class="weather-th">氣溫</th><th class="weather-th">相對濕度</th><th class="weather-th">最高/最低</th><th class="weather-th">氣溫變幅</th><th class="weather-th">風速(風向)</th><th class="weather-th">陣風</th><th class="weather-th">氣壓</th><th class="weather-th">草地溫</th></tr>`;
+            document.getElementById('table-head').innerHTML = `<tr><th class="weather-th">地區</th><th class="weather-th">氣溫</th><th class="weather-th">相對濕度</th><th class="weather-th">最高/最低</th><th class="weather-th">氣溫變幅</th><th class="weather-th">風速 / 陣風 (風向)</th><th class="weather-th">氣壓</th><th class="weather-th">草地溫</th></tr>`;
             let tHTML = '', mHTML = '';
             datas.forEach(row => {
                 const name = regionMap[row[0]] || row[0]; if (!row[1]) return;
-                tHTML += `<tr><td><strong>${name}</strong></td><td class="temp-val">${row[1]}°C</td><td>${row[2]}%</td><td>${row[5]}°C / ${row[6]}°C</td><td>${row[7]}°C</td><td>${row[4]} km/h (${row[3]})</td><td>${row[8]?row[8]+' km/h':'-'}</td><td>${row[9]?row[9]+' hPa':'-'}</td><td>${row[10]?row[10]+'°C':'-'}</td></tr>`;
-                mHTML += `<div class="station-card" style="border-left-color:var(--weather)"><div class="card-header"><span>${name}</span><span class="temp-val">${row[1]}°C</span></div><div class="card-grid"><div class="card-item"><span class="card-label">最高 / 最低</span><span class="card-val">${row[5]}°C / ${row[6]}°C</span></div><div class="card-item"><span class="card-label">相對濕度</span><span class="card-val">${row[2]}%</span></div><div class="card-item"><span class="card-label">風速 / 陣風 (風向)</span><span class="card-val">${row[4]} km/h / ${row[8]} km/h (${row[3]})</span></div><div class="card-item"><span class="card-label">海平面氣壓</span><span class="card-val">${row[9]||'-'} hPa</span></div></div></div>`;
+                tHTML += `<tr><td><strong>${name}</strong></td><td class="temp-val">${row[1]}°C</td><td>${row[2]}%</td><td>${row[5]}°C / ${row[6]}°C</td><td>${row[7]}°C</td><td>${row[4]} km/h / ${row[8]||'-'} km/h (${row[3]})</td><td>${row[9]?row[9]+' hPa':'-'}</td><td>${row[10]?row[10]+'°C':'-'}</td></tr>`;
+                mHTML += `<div class="station-card" style="border-left-color:var(--weather)"><div class="card-header"><span>${name}</span><span class="temp-val">${row[1]}°C</span></div><div class="card-grid"><div class="card-item"><span class="card-label">最高 / 最低</span><span class="card-val">${row[5]}°C / ${row[6]}°C</span></div><div class="card-item"><span class="card-label">相對濕度</span><span class="card-val">${row[2]}%</span></div><div class="card-item"><span class="card-label">風速 / 陣風 (風向)</span><span class="card-val">${row[4]} km/h / ${row[8]||'-'} km/h (${row[3]})</span></div><div class="card-item"><span class="card-label">海平面氣壓</span><span class="card-val">${row[9]||'-'} hPa</span></div></div></div>`;
             });
             document.getElementById('table-body').innerHTML = tHTML;
             document.getElementById('mobile-list').innerHTML = mHTML;
@@ -124,7 +173,12 @@
                 <option value="一般">污染物 - 只看「一般站」</option>
                 <option value="WEATHER">各區即時天氣 (JSON)</option>
             </select>
-            <div class="status-bar">數據時間: <span id="xml-date">--</span> | <button onclick="loadData()" style="border:2px solid var(--p); border-radius:6px; padding:2px 12px; cursor:pointer; background:white; color:var(--p); font-weight:bold;">⚡ 更新</button> [<span id="manual-time">--</span>]</div>
+            <div class="status-bar">
+                數據時間: <span id="xml-date">--</span> | 
+                <button onclick="loadData()" style="border:2px solid var(--p); border-radius:6px; padding:2px 12px; cursor:pointer; background:white; color:var(--p); font-weight:bold;">⚡ 更新</button>
+                <button class="remote-btn" onclick="triggerSync()">📡 遠端同步</button>
+                [<span id="manual-time">--</span>]
+            </div>
         </div>
     </div>
     <div class="desktop-view"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div>
