@@ -27,9 +27,9 @@
         .card-label { font-size: 0.62rem; color: #777; display: block; margin-bottom: 3px; }
         .card-val { font-size: 0.85rem; font-weight: bold; }
         
-        /* 遙控掣樣式 */
         .remote-btn { border: 2px solid var(--orange); border-radius: 6px; padding: 2px 8px; cursor: pointer; background: white; color: var(--orange); font-weight: bold; margin-left: 5px; transition: 0.2s; }
         .remote-btn:active { background: var(--orange); color: white; }
+        .remote-btn:disabled { border-color: #ccc; color: #ccc; cursor: not-allowed; }
 
         @media (max-width: 768px) { .desktop-view { display: none; } .mobile-view { display: block; } }
     </style>
@@ -37,11 +37,11 @@
     <script>
         const regionMap = {"hka":"赤鱲角","cch":"長洲","hpv":"跑馬地","hko":"天文台","hkp":"香港公園","se":"啟德","se1":"啟德跑道公園","ksc":"滘西洲","kp":"京士柏","klt":"九龍城","ktg":"觀塘","lfs":"流浮山","ngp":"昂坪","tyw":"北潭涌","pen":"坪洲","skg":"西貢","sha":"沙田","ssp":"深水埗","skw":"筲箕灣","sek":"石崗","ssh":"上水","sty":"赤柱","tkl":"打鼓嶺","plc":"大美督","tpo":"大埔","tls":"大隴","tc":"大老山","vp1":"山頂","jkb":"將軍澳","ty1":"青衣","twn":"荃灣可觀","tw":"荃灣城門谷","tun":"屯門","wgl":"橫瀾島","wlp":"濕地公園","hks":"黃竹坑","wts":"黃大仙","ylp":"元朗公園","cwb":"清水灣","tms":"大帽山"};
 
-        // 配置：請填寫你的 GitHub 資料
+        // ⚠️ 必填配置
         const GITHUB_CONFIG = {
-            owner: "ededcck",
-            repo: "hk-aqhi-tool",
-            workflow: "sync.yml"
+            owner: "ededcck",  // 你的 GitHub 帳號名
+            repo: "hk-aqhi-tool",       // 你的 Repo 名
+            workflow: "sync.yml"     // 你的 Workflow 檔案名
         };
 
         function adjustSticky() {
@@ -49,13 +49,13 @@
             document.querySelectorAll('thead th').forEach(th => th.style.top = (h - 1) + 'px');
         }
 
-        // 核心功能：遠端觸發 GitHub Actions
         async function triggerSync() {
             let token = localStorage.getItem('gh_token');
             if (!token) {
-                token = prompt("請輸入你的 GitHub Personal Access Token (需有 Actions 權限):");
-                if (token) localStorage.setItem('gh_token', token);
-                else return;
+                token = prompt("請輸入 GitHub Fine-grained Token (需有 Actions 讀寫權限):");
+                if (token) {
+                    localStorage.setItem('gh_token', token);
+                } else return;
             }
 
             const btn = document.querySelector('.remote-btn');
@@ -64,25 +64,30 @@
             btn.disabled = true;
 
             try {
+                // 正確的 GitHub API Dispatch URL
                 const url = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/actions/workflows/${GITHUB_CONFIG.workflow}/dispatches`;
                 const res = await fetch(url, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json'
+                        'Authorization': `Bearer ${token}`, // 改用 Bearer 較為標準
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ ref: 'main' })
                 });
 
                 if (res.status === 204) {
-                    alert("✅ 已成功叫醒 GitHub！請等 1-2 分鐘讓數據更新。");
+                    alert("✅ 指令已送出！請等約 1 分鐘後重新整理頁面。");
                 } else {
                     const error = await res.json();
-                    alert("❌ 失敗: " + (error.message || res.statusText));
-                    if (res.status === 401) localStorage.removeItem('gh_token');
+                    alert("❌ 錯誤: " + (error.message || res.statusText));
+                    if (res.status === 401) {
+                        alert("Token 無效，已清除。請重新點擊並輸入正確 Token。");
+                        localStorage.removeItem('gh_token');
+                    }
                 }
             } catch (e) {
-                alert("❌ 連線出錯");
+                alert("❌ 無法連接到 GitHub API");
             } finally {
                 btn.innerText = originalText;
                 btn.disabled = false;
@@ -174,7 +179,7 @@
                 <option value="WEATHER">各區即時天氣 (JSON)</option>
             </select>
             <div class="status-bar">
-                數據時間: <span id="xml-date">--</span> | 
+                數據時間: <span id="xml-date">--</span> | 
                 <button onclick="loadData()" style="border:2px solid var(--p); border-radius:6px; padding:2px 12px; cursor:pointer; background:white; color:var(--p); font-weight:bold;">⚡ 更新</button>
                 <button class="remote-btn" onclick="triggerSync()">📡 遠端同步</button>
                 [<span id="manual-time">--</span>]
