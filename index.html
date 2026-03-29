@@ -50,6 +50,10 @@
         }
 
         async function triggerSync() {
+            // 新增：二次確認邏輯
+            const doubleCheck = confirm("確定要觸發遠端同步 (GitHub Actions) 嗎？\n這將會運行 sync.yml 更新數據。");
+            if (!doubleCheck) return; 
+
             let token = localStorage.getItem('gh_token');
             if (!token) {
                 token = prompt("請輸入 GitHub Fine-grained Token (需有 Actions 讀寫權限):");
@@ -64,12 +68,11 @@
             btn.disabled = true;
 
             try {
-                // 正確的 GitHub API Dispatch URL
                 const url = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/actions/workflows/${GITHUB_CONFIG.workflow}/dispatches`;
                 const res = await fetch(url, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`, // 改用 Bearer 較為標準
+                        'Authorization': `Bearer ${token}`,
                         'Accept': 'application/vnd.github.v3+json',
                         'Content-Type': 'application/json'
                     },
