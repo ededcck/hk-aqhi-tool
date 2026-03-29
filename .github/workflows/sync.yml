@@ -1,8 +1,8 @@
 name: Sync Weather and Air Quality Data
 
 on:
-  schedule:
-    - cron: '*/5 * * * *' # 每 5 分鐘自動執行一次
+ # schedule:
+ #   - cron: '*/5 * * * *' # 每 5 分鐘自動執行一次
   workflow_dispatch:      # 容許手動啟動
 
 permissions:
